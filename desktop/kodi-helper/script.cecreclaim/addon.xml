@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon id="script.cecreclaim" name="CEC Reclaim" version="1.0.0" provider-name="skull-01">
+  <requires>
+    <import addon="xbmc.python" version="3.0.0"/>
+  </requires>
+  <extension point="xbmc.python.script" library="default.py">
+    <provides>executable</provides>
+  </extension>
+  <extension point="xbmc.addon.metadata">
+    <summary lang="en_GB">Re-assert Kodi as the active HDMI-CEC source.</summary>
+    <description lang="en_GB">A tiny companion helper for OppoKodiBridge. When run -- OppoKodiBridge invokes it over localhost JSON-RPC (Addons.ExecuteAddon -&gt; script.cecreclaim) once a disc handoff ends -- it executes Kodi's CECActivateSource builtin so Kodi re-announces ITS OWN active source (legitimate, in-spec CEC) and the TV switches back to Kodi's input. Single-shot, no settings, no UI. The switch itself is open-loop (CEC has no acknowledgement).</description>
+    <platform>all</platform>
+    <license>MIT</license>
+  </extension>
+</addon>
