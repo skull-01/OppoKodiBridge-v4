@@ -1,0 +1,156 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: service.oppokodibridge\n"
+"Report-Msgid-Bugs-To: https://github.com/skull-01/OppoKodiBridge\n"
+"Language: en_GB\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgctxt "#30000"
+msgid "OPPO / M9205"
+msgstr ""
+
+msgctxt "#30001"
+msgid "OPPO IP address"
+msgstr ""
+
+msgctxt "#30002"
+msgid "HTTP API port"
+msgstr ""
+
+msgctxt "#30003"
+msgid "Hand off playback to the OPPO"
+msgstr ""
+
+msgctxt "#30004"
+msgid "Only hand discs & ISO files to the OPPO (else: everything)"
+msgstr ""
+
+msgctxt "#30005"
+msgid "OPPO model (NFS playback layout)"
+msgstr ""
+
+msgctxt "#30006"
+msgid "M9205 - mount the file's folder, play the bare name"
+msgstr ""
+
+msgctxt "#30007"
+msgid "M9207 Plus / UDP-203 - mount the export root, play the sub-path"
+msgstr ""
+
+msgctxt "#30010"
+msgid "NAS path mapping"
+msgstr ""
+
+msgctxt "#30011"
+msgid "Kodi path prefix (e.g. nfs://192.168.10.20/srv/nfs/media)"
+msgstr ""
+
+msgctxt "#30012"
+msgid "OPPO path prefix (e.g. /mnt/nas/media)"
+msgstr ""
+
+msgctxt "#30020"
+msgid "CEC / TV switching"
+msgstr ""
+
+msgctxt "#30021"
+msgid "Auto-enable Kodi CEC on start"
+msgstr ""
+
+msgctxt "#30022"
+msgid "Reclaim the TV when playback ends"
+msgstr ""
+
+msgctxt "#30023"
+msgid "Switch the TV to the OPPO on play (CEC)"
+msgstr ""
+
+msgctxt "#30024"
+msgid "OPPO HDMI physical address (e.g. 1.0.0.0 = HDMI 1)"
+msgstr ""
+
+msgctxt "#30030"
+msgid "Advanced"
+msgstr ""
+
+msgctxt "#30031"
+msgid "Use JSON play payload (M9205)"
+msgstr ""
+
+msgctxt "#30032"
+msgid "OPPO poll interval (seconds)"
+msgstr ""
+
+msgctxt "#30033"
+msgid "Network timeout (seconds)"
+msgstr ""
+
+msgctxt "#30034"
+msgid "Play payload: media type"
+msgstr ""
+
+msgctxt "#30035"
+msgid "Play payload: app device type"
+msgstr ""
+
+msgctxt "#30050"
+msgid "Serial control (RS-232)"
+msgstr ""
+
+msgctxt "#30051"
+msgid "Use serial cable for OPPO control (instead of network)"
+msgstr ""
+
+msgctxt "#30052"
+msgid "Serial device (e.g. /dev/ttyUSB0)"
+msgstr ""
+
+msgctxt "#30053"
+msgid "Serial baud rate (OPPO default 9600)"
+msgstr ""
+
+msgctxt "#30060"
+msgid "TV switching"
+msgstr ""
+
+msgctxt "#30061"
+msgid "Switch the TV by power-cycling the OPPO (its own One-Touch-Play)"
+msgstr ""
+
+msgctxt "#30040"
+msgid "Internal"
+msgstr ""
+
+msgctxt "#30041"
+msgid "CEC setup guidance already shown"
+msgstr ""
+
+msgctxt "#30065"
+msgid "Kodi JSON-RPC port (for the CEC reclaim; default 8080)"
+msgstr ""
+
+msgctxt "#30066"
+msgid "Kodi JSON-RPC username (only if Kodi web control has a password)"
+msgstr ""
+
+msgctxt "#30067"
+msgid "Kodi JSON-RPC password (only if Kodi web control has a password)"
+msgstr ""
+
+msgctxt "#30070"
+msgid "Setup & tests"
+msgstr ""
+
+msgctxt "#30071"
+msgid "Ping the OPPO (network reachability)"
+msgstr ""
+
+msgctxt "#30072"
+msgid "Control test (query the OPPO's power state)"
+msgstr ""
+
+msgctxt "#30073"
+msgid "CEC switch-over test (grab the OPPO, then reclaim Kodi)"
+msgstr ""
