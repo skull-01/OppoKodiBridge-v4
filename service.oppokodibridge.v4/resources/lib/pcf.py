@@ -42,9 +42,10 @@ __RULES__  </rules>
 def build_xml(player_script_path: str, python_bin: str = "python3") -> str:
     """The playercorefactory.xml content routing disc content to ``player_script_path``.
 
-    The routing rules come from ``detector.PCF_RULES`` -- the same definition the runtime classifier
-    uses -- so the XML and the in-process ``is_handoff_target`` can never drift apart. Every substituted
-    value is XML-escaped so a path containing ``&`` / ``<`` cannot corrupt the file.
+    The routing rules come from ``detector.PCF_RULES``, which is *derived* from the same
+    ``_DISC_SEGMENTS`` / ``_DISC_FILE_SUFFIXES`` constants the runtime ``is_handoff_target`` matches on
+    -- so the generated XML and the in-process check cannot drift apart. Every substituted value is
+    XML-escaped so a path containing ``&`` / ``<`` cannot corrupt the file.
     """
     from xml.sax.saxutils import escape
 

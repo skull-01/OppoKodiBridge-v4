@@ -97,12 +97,12 @@ sequenceDiagram
 **You press play on an ISO/BDMV**
 3. Kodi consults playercorefactory. The **rules match** `.iso` / `*/BDMV/*` / `*/VIDEO_TS/*` (plus
    `*.bdmv`) and route to the external "OppoKodiBridge" player **instead of Kodi's internal player** —
-   so Kodi never starts decoding and there's **no blip**. Those XML rules are generated from
-   `detector.PCF_RULES`; at play time the orchestrator independently re-checks with
-   `detector.is_handoff_target`. The two are *not* byte-identical: the runtime check is **broader** (its
-   `_DISC_SEGMENTS` also treats `HVDVD_TS` folders, and `.ifo`, as disc content), so an `HVDVD_TS`
-   folder is accepted at runtime but **not** currently routed by the generated `playercorefactory.xml` —
-   a known asymmetry between the two definitions (see the detector row in the component map).
+   so Kodi never starts decoding and there's **no blip**. Those XML rules are *generated from*
+   `detector.PCF_RULES`, which is derived from the same `_DISC_SEGMENTS` / suffix constants the
+   orchestrator's play-time `detector.is_handoff_target` re-check uses — so the XML routing and the
+   runtime classifier match exactly the same files and **cannot drift apart** (pinned by a consistency
+   test). HD-DVD (`HVDVD_TS`) is deliberately *not* in that set — the OPPO can't play it, so it stays
+   in Kodi rather than triggering a failed handoff.
 4. Kodi launches `/usr/bin/python3 pcf_player.py "<the nfs:// file path>"` as a **separate process**
    and waits for it to exit.
 
@@ -187,7 +187,7 @@ graph LR
 | `resources/lib/pcf.py` | Builds + installs/uninstalls `playercorefactory.xml` — the routing rules (from `detector.PCF_RULES`) plus the external-player command. Backs up / restores a user's own file via a marker guard. |
 | `pcf_player.py` | **The external player** Kodi launches. Runs outside Kodi (no `xbmc`), loads `runtime_config.json`, calls `orchestrator.run`, and never crashes the player process. |
 | `resources/lib/orchestrator.py` | The flow: `detect → grab (cec) → play (handoff) → watch (monitor) → reclaim (cec, in finally)`. |
-| `resources/lib/detector.py` | Which files qualify for handoff — disc images (`.iso`) and disc folders (BDMV / VIDEO_TS / HVDVD_TS). Home of **both** the playercorefactory routing rules (`PCF_RULES`, used to build the XML) and the runtime check (`is_handoff_target`). The runtime check is the broader of the two — it also matches `HVDVD_TS` and `.ifo`, which `PCF_RULES` currently does not. |
+| `resources/lib/detector.py` | Which files qualify for handoff — disc images (`.iso`) and disc folders (BDMV / VIDEO_TS). Home of **both** the playercorefactory routing rules (`PCF_RULES`) and the runtime check (`is_handoff_target`); `PCF_RULES` is **derived** from the same `_DISC_SEGMENTS` / suffix constants the runtime uses, so the two match the same files and cannot drift. |
 | `resources/lib/handoff.py` | Headless OPPO playback over the HTTP app API (path map → wake → init → NFS login/mount → play). **No** TV/CEC switching and no monitoring. |
 | `resources/lib/cec.py` | The **only** place this add-on asserts CEC: `grab_oppo` (OPPO power-cycle → its own One-Touch-Play) + `reclaim_kodi` (localhost JSON-RPC → `script.cecreclaim` → `CECActivateSource`). Both single-shot, both non-fatal. |
 | `resources/lib/monitor.py` | Two-phase playback watch — HTTP poll until playing, then `#SVM 3` verbose until `@UPL STOP` (with an HTTP fallback). Reports state; **asserts nothing**. |

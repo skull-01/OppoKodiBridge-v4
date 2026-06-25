@@ -1,5 +1,7 @@
 """The handoff detector: only disc content (ISO + BDMV/VIDEO_TS) qualifies; everything else stays in
 Kodi. pcf.py builds its routing rules from the same PCF_RULES, so the two cannot drift."""
+import re
+
 from resources.lib import detector, pcf
 
 
@@ -42,3 +44,50 @@ def test_pcf_rules_drive_the_xml():
     assert "/path/to/pcf_player.py" in xml
     for kind, pattern in detector.PCF_RULES:
         assert '{}="{}"'.format(kind, pattern) in xml
+
+
+def test_hvdvd_ts_and_bare_ifo_are_not_handoff_targets():
+    # Option B: HD-DVD (HVDVD_TS) is not an OPPO-playable format, and a bare .ifo on its own is not a
+    # disc -- both stay in Kodi rather than triggering a failed OPPO handoff.
+    assert not detector.is_handoff_target("nfs://h/s/01Movies/Film/HVDVD_TS/HV000I01.EVO")
+    assert not detector.is_handoff_target("nfs://h/s/01Movies/Film/HVDVD_TS/index.ifo")
+    assert not detector.is_handoff_target("nfs://h/s/01Movies/notes.ifo")  # bare .ifo, no VIDEO_TS
+    # ...but a .ifo INSIDE a VIDEO_TS folder still qualifies (matched via the folder, not the suffix).
+    assert detector.is_handoff_target("nfs://h/s/01Movies/Film/VIDEO_TS/VIDEO_TS.IFO")
+
+
+def _xml_would_route(path):
+    """Apply PCF_RULES the way Kodi's playercorefactory does: a 'filetypes' rule matches the file
+    extension; a 'filename' rule is a regex (the patterns carry their own (?i)) searched against the
+    whole path. Route to the external player if ANY rule matches."""
+    basename = path.rsplit("/", 1)[-1]
+    ext = basename.rsplit(".", 1)[-1].lower() if "." in basename else ""
+    for kind, pattern in detector.PCF_RULES:
+        if kind == "filetypes":
+            if re.fullmatch(pattern, ext, re.IGNORECASE):
+                return True
+        elif re.search(pattern, path):  # filename regex
+            return True
+    return False
+
+
+def test_pcf_rules_and_runtime_agree():
+    # Single source of truth: for every realistic full path Kodi might route, the generated
+    # playercorefactory.xml rules and is_handoff_target MUST give the same answer (no drift).
+    corpus = [
+        ("nfs://h/s/01Movies/Dune (2021).iso", True),
+        ("nfs://h/s/X/Y.ISO", True),
+        ("nfs://h/s/01Movies/Ant-Man (2015)/BDMV/index.bdmv", True),
+        ("nfs://h/s/01Movies/Film/index.bdmv", True),  # .bdmv leaf NOT under a BDMV/ dir -> exercises the suffix rule alone
+        ("nfs://h/s/01Movies/Ant-Man (2015)/BDMV/STREAM/00800.m2ts", True),
+        ("nfs://h/s/X/VIDEO_TS/VIDEO_TS.IFO", True),
+        ("nfs://h/s/01Movies/Film/HVDVD_TS/HV000I01.EVO", False),
+        ("nfs://h/s/01Movies/notes.ifo", False),
+        ("nfs://h/s/02TV/Show/S01E01.mkv", False),
+        ("nfs://h/s/X/film.mp4", False),
+        ("nfs://h/s/Movies/looseclip/STREAM/0080.m2ts", False),
+    ]
+    for path, expected in corpus:
+        assert _xml_would_route(path) == expected, ("xml", path)
+        assert detector.is_handoff_target(path) == expected, ("runtime", path)
+        assert _xml_would_route(path) == detector.is_handoff_target(path), ("drift", path)

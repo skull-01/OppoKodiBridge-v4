@@ -1,29 +1,40 @@
 """Detect which Kodi playback items qualify for OPPO handoff -- the single source of truth.
 
-ONLY disc content goes to the OPPO: disc images (``.iso``) and disc folders (BDMV / VIDEO_TS /
-HVDVD_TS). Everything else (MKV, MP4, loose m2ts, ...) stays in Kodi. ``pcf.py`` builds the
-playercorefactory routing rules from ``PCF_RULES`` here, and the orchestrator re-checks at play time,
-so the XML routing and the runtime classifier can never drift apart.
+ONLY disc content goes to the OPPO: disc images (``.iso``) and disc folders (BDMV / VIDEO_TS).
+Everything else -- MKV, MP4, loose m2ts, and HD-DVD (HVDVD_TS), which the OPPO cannot play, so routing
+it would only cause a failed handoff -- stays in Kodi. The playercorefactory routing rules
+(``PCF_RULES``) are DERIVED from the very same ``_DISC_SEGMENTS`` / ``_DISC_FILE_SUFFIXES`` constants
+that ``is_handoff_target`` matches on (see ``_build_pcf_rules``), so the XML routing Kodi reads at boot
+and the in-process runtime classifier are one definition and cannot drift apart.
 """
 from __future__ import annotations
 
 import urllib.parse
 
-_DISC_SEGMENTS = ("bdmv", "video_ts", "hvdvd_ts")
+# Disc-folder structure segments: a path containing one of these as a whole component is disc content.
+_DISC_SEGMENTS = ("bdmv", "video_ts")
 
-# The playercorefactory <rule> patterns that route a file to the OPPO external player. (kind, pattern)
-# where kind is "filetypes" or "filename". One definition shared by pcf.py's XML and is_handoff_target.
-PCF_RULES = (
-    ("filetypes", "iso"),
-    ("filename", "(?i).*/bdmv/.*"),
-    ("filename", "(?i).*/video_ts/.*"),
-    ("filename", r"(?i).*\.bdmv$"),
-    ("filename", r"(?i).*\.iso$"),
-)
+# Disc-structure leaf-file suffixes (besides ``.iso``, handled separately): a file whose name ends with
+# one of these is disc content even outside a recognised disc folder. Kept in lockstep with PCF_RULES.
+_DISC_FILE_SUFFIXES = (".bdmv",)
+
+
+def _build_pcf_rules():
+    """The playercorefactory ``<rule>`` set, as ``(kind, pattern)`` where kind is "filetypes" or
+    "filename" -- DERIVED from the segment + suffix constants above (plus the ``.iso`` image rules), so
+    this XML definition and the runtime ``is_handoff_target`` are guaranteed to match the same files."""
+    rules = [("filetypes", "iso"), ("filename", r"(?i).*\.iso$")]
+    rules += [("filename", "(?i).*/{}/.*".format(seg)) for seg in _DISC_SEGMENTS]
+    rules += [("filename", r"(?i).*\{}$".format(suffix)) for suffix in _DISC_FILE_SUFFIXES]
+    return tuple(rules)
+
+
+# One definition shared by pcf.py's generated XML and is_handoff_target -- see _build_pcf_rules.
+PCF_RULES = _build_pcf_rules()
 
 
 def _disc_marker_index(low_path: str) -> int:
-    """Index where a disc-structure segment (BDMV/VIDEO_TS/HVDVD_TS) begins as a whole path component,
+    """Index where a disc-structure segment (BDMV/VIDEO_TS) begins as a whole path component,
     or -1. Matches the segment at the START of the path too (a disc folder at the share root)."""
     for seg in _DISC_SEGMENTS:
         if low_path.startswith(seg + "/"):
@@ -40,9 +51,9 @@ def is_iso(path: str) -> bool:
 
 
 def is_disc_path(path: str) -> bool:
-    """True for a Blu-ray / DVD disc-folder path (BDMV / VIDEO_TS / HVDVD_TS structure)."""
+    """True for a Blu-ray / DVD disc-folder path (BDMV / VIDEO_TS structure) or a disc index file."""
     low = str(path).replace("\\", "/").lower()
-    return low.endswith((".bdmv", ".ifo")) or _disc_marker_index(low) >= 0
+    return low.endswith(_DISC_FILE_SUFFIXES) or _disc_marker_index(low) >= 0
 
 
 def disc_folder(path: str) -> str:
@@ -60,7 +71,7 @@ def disc_folder(path: str) -> str:
 
 def is_handoff_target(path: str) -> bool:
     """The handoff filter. Route to the OPPO ONLY for disc content: disc images (``.iso``) and disc
-    folders (BDMV / VIDEO_TS / HVDVD_TS). Everything else stays in Kodi -- this is the only kind of
+    folders (BDMV / VIDEO_TS). Everything else stays in Kodi -- this is the only kind of
     file Kodi should send to the OPPO."""
     text = str(path)
     if text.lower().startswith(("nfs://", "smb://")):
