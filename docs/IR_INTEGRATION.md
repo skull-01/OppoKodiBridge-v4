@@ -1,8 +1,17 @@
-# IR integration — Broadlink RM4 mini TV input switching (v4)
+# IR integration — Broadlink RM4 mini TV input switching (superseded — historical IR design)
 
-> **Status:** the wiring fix, the timing change, the hand-rolled Broadlink client, the sequencing
-> layer, the learn tool, and the off-box test suite are **landed and green** (47 tests, no hardware).
-> What remains is **hardware validation** — confirming the protocol against a real RM4 + TCL and
+> ⚠️ **SUPERSEDED — historical reference, not the shipped v4 design.** This document describes a
+> **Broadlink RM4 IR** approach to TV-input switching that was explored on the v3 line. **v4 does not
+> ship IR**: it switches the TV with pure, spec-legitimate **HDMI-CEC** (the OPPO's own One-Touch-Play
+> grab + Kodi's own `script.cecreclaim` reclaim) — see [README](../README.md) and
+> [ARCHITECTURE.md](ARCHITECTURE.md). The implementation files referenced below
+> (`resources/lib/broadlink_rm4.py`, `resources/lib/ir.py`) were **never merged into this tree**, so
+> nothing here reflects the current codebase. Kept only as a design record should IR be revisited.
+
+> **Historical status (IR branch — not in this build):** the wiring fix, the timing change, the
+> hand-rolled Broadlink client, the sequencing layer, the learn tool, and the off-box test suite were
+> **landed and green** *in the IR branch* (47 tests, no hardware) at the time of this write-up.
+> What remained then was **hardware validation** — confirming the protocol against a real RM4 + TCL and
 > capturing the actual input codes — tracked in §10. Until an RM4 is configured, `ir.configured()`
 > is False and the handoff falls back to the interim OPPO power-cycle exactly as before.
 

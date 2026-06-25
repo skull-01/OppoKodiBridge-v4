@@ -63,13 +63,15 @@ bug -- still single-shot, still never re-asserting.
 
 1. **OPPO:** enable IP/serial control (TCP `:23`); set the OPPO IP + NAS paths in the add-on settings.
 2. **Kodi:** enable **Settings → Services → Control → Allow remote control via HTTP** (port `8080`), and
-   install the [`script.cecreclaim`](desktop/kodi-helper/script.cecreclaim) helper (the reclaim target).
+   install the `script.cecreclaim` helper — a small companion Kodi add-on (the reclaim target) that
+   calls `CECActivateSource`. It is a separate add-on and is **not bundled in this repo**; install it
+   alongside this one.
 3. **Settings → Setup & tests:** **Ping the OPPO**, then **Control test** (`#QPW`), then the guided
    **CEC switch-over test** — it grabs the OPPO, asks if the TV switched, reclaims Kodi, and asks again.
 
 ## Status
 
-Experimental, software-verified only (83 off-box tests: `python -m pytest -q`). Installs alongside v2 and v3
+Experimental, software-verified only (73 off-box tests: `python -m pytest -q`). Installs alongside v2 and v3
 (add-on id `service.oppokodibridge.v4`) for direct A/B/C comparison. Hardware validation pending.
 
 ## License
