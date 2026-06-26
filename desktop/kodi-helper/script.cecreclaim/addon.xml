@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="script.cecreclaim" name="CEC Reclaim" version="1.0.0" provider-name="skull-01">
+<addon id="script.cecreclaim" name="CEC Reclaim" version="1.1.0" provider-name="skull-01">
   <requires>
     <import addon="xbmc.python" version="3.0.0"/>
   </requires>
@@ -11,5 +11,6 @@
     <description lang="en_GB">A tiny companion helper for OppoKodiBridge. When run -- OppoKodiBridge invokes it over localhost JSON-RPC (Addons.ExecuteAddon -&gt; script.cecreclaim) once a disc handoff ends -- it executes Kodi's CECActivateSource builtin so Kodi re-announces ITS OWN active source (legitimate, in-spec CEC) and the TV switches back to Kodi's input. Single-shot, no settings, no UI. The switch itself is open-loop (CEC has no acknowledgement).</description>
     <platform>all</platform>
     <license>MIT</license>
+    <news>1.1.0 -- Version bump to track OppoKodiBridge v4.1.0 (no functional change to the helper).</news>
   </extension>
 </addon>
