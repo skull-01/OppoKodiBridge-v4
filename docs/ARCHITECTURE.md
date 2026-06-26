@@ -1,8 +1,8 @@
 # OppoKodiBridge v4 — architecture & walkthrough
 
 **playercorefactory fork:** Kodi hands a disc to the OPPO *before* playing it (so there's no pre-play
-blip), monitors playback via the OPPO's verbose `#SVM 3` push stream, and switches the TV using
-**only legitimate HDMI-CEC** — no IR, no spoofing.
+blip), monitors playback for the stop (verbose `#SVM 3` push on the M9205, HTTP-only on the M9207 Plus
+clone), and switches the TV using **only legitimate HDMI-CEC** — no IR, no spoofing.
 
 ---
 
@@ -15,7 +15,8 @@ own player touches them. That script runs outside Kodi and:
 1. **power-cycles the OPPO** so the OPPO's *own* One-Touch-Play grabs the TV (a device announcing its
    own active source is the only in-spec way to route the TV — no IR, no foreign-initiator injection);
 2. plays the file on the OPPO over the network;
-3. watches for the stop via the OPPO's push-based verbose mode; then
+3. watches for the stop — the OPPO's push-based verbose mode on the M9205, HTTP polling on the M9207
+   Plus; then
 4. asks Kodi to re-assert *its own* active source (the reclaim) and exits.
 
 No blip, and every TV-input assertion is single-shot and tied to an event.
@@ -62,7 +63,7 @@ sequenceDiagram
     end
 
     rect rgb(232,255,236)
-    Note over X,O: Phase 2 — verbose #SVM 3 (push, instant); HTTP poll fallback if it fails
+    Note over X,O: Phase 2 — M9205: verbose #SVM 3 (push, instant) + HTTP fallback; M9207: HTTP poll only
     X->>O: #SVM 3  (TCP :23)
     loop during playback
         O-->>X: @UTC  (~1s heartbeat)
@@ -117,19 +118,22 @@ sequenceDiagram
    - **Plays on the OPPO over HTTP** (`handoff.play`): wake (`:7624`) → init dance
      (firmware/setup/signin/globalinfo) → resolve the OPPO's own NFS server (`/getdevicelist`) →
      `loginNfsServer` → `mountNfsSharedFolder` → `/playnormalfile` (files/ISO) or
-     `/checkfolderhasBDMV` (discs). The mount/play split is model-aware: the **M9205** mounts the
-     file's folder and plays the bare leaf name; the **M9207 Plus / UDP-203** mounts the export root and
-     plays the sub-path.
+     `/checkfolderhasBDMV` (discs). The mount/play layout is the same for every model: mount the file's
+     folder and play the bare leaf name (the OPPO won't play sub-paths of a mount). `oppo_model` no
+     longer affects this — it only selects the Phase-2 stop-monitor transport (below).
 
 **Monitoring — two phases (`monitor.watch_playback`, asserts nothing)**
 7. **Phase 1 — pre-playback (HTTP):** poll `/getglobalinfo` until the OPPO *actually* starts playing
    (NFS mount + buffer can take ~10s). Latency-tolerant, so HTTP owns this window; it gives up after a
    grace count if playback never starts.
-8. **Phase 2 — playing (verbose TCP):** open a `#SVM 3` connection on `:23`. The OPPO **pushes** `@UTC`
-   (~1s heartbeat) and `@UPL` on every state change. Block until `@UPL STOP` — detected **instantly**,
-   not on a poll tick. If the verbose channel fails, it **falls back to HTTP polling** with a tri-state
-   probe (a transient blip is never mistaken for a stop) plus read-failure and watch-time ceilings, so
-   the watch always returns and the reclaim always runs.
+8. **Phase 2 — playing (model-aware stop detection):** on the **M9205**, open a `#SVM 3` connection on
+   `:23`. The OPPO **pushes** `@UTC` (~1s heartbeat) and `@UPL` on every state change; block until
+   `@UPL STOP` — detected **instantly**, not on a poll tick — falling back to HTTP polling if the
+   verbose channel fails. On the **M9207 Plus / UDP-203** the verbose channel is skipped entirely (its
+   `:23` `#SVM` behaviour is unverified and holding the socket is implicated in the remote locking up),
+   so stop is detected by HTTP polling. Either way the HTTP watch uses a tri-state probe (a transient
+   blip is never mistaken for a stop) plus read-failure and watch-time ceilings, so the watch always
+   returns and the reclaim always runs.
 
 **Stop / switch-back**
 9. The reclaim runs in the orchestrator's `finally`, so it fires whether playback succeeded or failed
@@ -190,7 +194,7 @@ graph LR
 | `resources/lib/detector.py` | Which files qualify for handoff — disc images (`.iso`) and disc folders (BDMV / VIDEO_TS). Home of **both** the playercorefactory routing rules (`PCF_RULES`) and the runtime check (`is_handoff_target`); `PCF_RULES` is **derived** from the same `_DISC_SEGMENTS` / suffix constants the runtime uses, so the two match the same files and cannot drift. |
 | `resources/lib/handoff.py` | Headless OPPO playback over the HTTP app API (path map → wake → init → NFS login/mount → play). **No** TV/CEC switching and no monitoring. |
 | `resources/lib/cec.py` | The **only** place this add-on asserts CEC: `grab_oppo` (OPPO power-cycle → its own One-Touch-Play) + `reclaim_kodi` (localhost JSON-RPC → `script.cecreclaim` → `CECActivateSource`). Both single-shot, both non-fatal. |
-| `resources/lib/monitor.py` | Two-phase playback watch — HTTP poll until playing, then `#SVM 3` verbose until `@UPL STOP` (with an HTTP fallback). Reports state; **asserts nothing**. |
+| `resources/lib/monitor.py` | Two-phase playback watch — HTTP poll until playing, then stop detection (`#SVM 3` verbose until `@UPL STOP` on the M9205 with an HTTP fallback; HTTP-only on the M9207 Plus). Reports state; **asserts nothing**. |
 | `resources/lib/oppo_http.py` | OPPO protocol client (HTTP `:436` + control `:23`), incl. `power_cycle`, `verbose_watch_until_stop`, and the `@UPL` parser. |
 | `resources/lib/config.py` | `Config`; `from_addon()` (service, in Kodi) and `from_dict()` (external player, via the JSON). |
 | `script.cecreclaim` | A **separate companion Kodi add-on** (the reclaim target) that calls `CECActivateSource`. **Not bundled in this repo** — install it alongside this add-on. |
@@ -226,7 +230,8 @@ graph LR
   HTTP poll for stop; CEC power-cycle + `CECActivateSource` reclaim.
 - **v3:** playercorefactory — Kodi hands the file off before playing it (**no blip**); verbose `#SVM 3`
   for instant stop; switched the TV with a **Broadlink IR blaster** (CEC-free).
-- **v4:** playercorefactory (**no blip**) + verbose `#SVM 3`, but switches the TV with **pure,
+- **v4:** playercorefactory (**no blip**) + model-aware stop watch (verbose `#SVM 3` on the M9205,
+  HTTP-only on the M9207 Plus), but switches the TV with **pure,
   spec-legitimate HDMI-CEC** — the OPPO's own One-Touch-Play grab + Kodi's own single-shot reclaim via
   `script.cecreclaim`. **No IR, no injection.** (The historical IR design is captured, as superseded
   reference, in [`IR_INTEGRATION.md`](IR_INTEGRATION.md).)

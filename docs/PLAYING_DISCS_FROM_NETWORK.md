@@ -87,8 +87,11 @@ curl "http://192.168.10.10:436/mountNfsSharedFolder?{\"server\":\"192.168.10.20\
 
 ### Step 4a — Play an ISO (or any single file)
 Mount the file's folder (above), then play the **bare filename** from `/mnt/nfs1` — the OPPO won't play
-sub-paths of a mount.
+sub-paths of a mount. For an **ISO** the add-on first sends a `STP` and waits ~4s, so any prior playback
+is cleared before the image loads (reference-aligned; a plain single file skips the STP).
 ```sh
+# ISO only: clear prior playback, then settle ~4s before the open
+curl "http://192.168.10.10:436/sendremotekey?{\"key\":\"STP\"}"
 # /playnormalfile? then {  <percent-encoded inner JSON>  }
 # inner: "path":"/mnt/nfs1/Dune (2021).iso","index":0,"type":1,"appDeviceType":2,"extraNetPath":"192.168.10.20","playMode":0
 curl "http://192.168.10.10:436/playnormalfile?{%22path%22%3A%22%2Fmnt%2Fnfs1%2FDune%20(2021).iso%22%2C%22index%22%3A0%2C%22type%22%3A1%2C%22appDeviceType%22%3A2%2C%22extraNetPath%22%3A%22192.168.10.20%22%2C%22playMode%22%3A0}"
@@ -96,11 +99,11 @@ curl "http://192.168.10.10:436/playnormalfile?{%22path%22%3A%22%2Fmnt%2Fnfs1%2FD
 
 ### Step 4b — Play a Blu-ray disc folder (BDMV)
 A BDMV disc is a **folder** (containing a `BDMV/` subfolder). You don't play `index.bdmv`; you point the
-OPPO at the disc folder. Mount the disc folder's **parent**, send a STOP to clear any stuck disc, then
-call `checkfolderhasBDMV` — which on this OPPO **starts the disc**, it doesn't merely check.
+OPPO at the disc folder. Mount the disc folder's **parent**, then call `checkfolderhasBDMV` — which on
+this OPPO **starts the disc**, it doesn't merely check. No STP is sent first (reference-aligned); if
+`checkfolderhasBDMV` reports failure, the add-on falls back to opening the folder via `/playnormalfile`.
 ```sh
 # mount the PARENT of the disc folder, e.g. folder "srv/nfs/media/Movies"
-curl "http://192.168.10.10:436/sendremotekey?{\"key\":\"STP\"}"
 # then start the disc folder (relative to the mount):
 curl "http://192.168.10.10:436/checkfolderhasBDMV?{\"folderpath\":\"/mnt/nfs1/Movies/Dune (2021)\"}"
 ```
@@ -197,8 +200,9 @@ enable it on the **TV** and the **OPPO**.
 
 - **Mount the folder, play the bare filename.** The OPPO won't play a sub-path of a mount, so mount the
   file's folder and play just the basename.
-- **BDMV plays the disc folder, not `index.bdmv`** — via `checkfolderhasBDMV`, after a `STP` to clear a
-  stuck disc.
+- **BDMV plays the disc folder, not `index.bdmv`** — via `checkfolderhasBDMV` (no STP first), with a
+  `/playnormalfile` fallback if it reports failure. The `STP`+~4s settle is sent before an **ISO**,
+  not before a disc folder (reference-aligned).
 - **Never mount a folder the NAS doesn't actually export.** Doing so can **hard-crash the OPPO** (both
   the `:436` and `:23` ports die) and it needs a mains power-cycle to recover. Only mount real exports.
 - **Use the address the OPPO can reach**, from `/getdevicelist` — not necessarily your PC's NAS address.

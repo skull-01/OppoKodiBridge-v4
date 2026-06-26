@@ -28,15 +28,15 @@ msgid "Only hand discs & ISO files to the OPPO (else: everything)"
 msgstr ""
 
 msgctxt "#30005"
-msgid "OPPO model (NFS playback layout)"
+msgid "OPPO model (stop-monitor transport)"
 msgstr ""
 
 msgctxt "#30006"
-msgid "M9205 - mount the file's folder, play the bare name"
+msgid "M9205 - verbose #SVM 3 push stop-watch (with HTTP fallback)"
 msgstr ""
 
 msgctxt "#30007"
-msgid "M9207 Plus / UDP-203 - mount the export root, play the sub-path"
+msgid "M9207 Plus / UDP-203 - HTTP-only stop-watch (no #SVM 3 on :23)"
 msgstr ""
 
 msgctxt "#30010"

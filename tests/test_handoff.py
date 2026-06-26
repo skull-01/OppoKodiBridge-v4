@@ -84,6 +84,10 @@ class _RecordingClient(_FakeClient):
         self.calls.append(("play_bdmv", name))
         return self._reply
 
+    def stop(self):
+        self.calls.append(("stop", None))
+        return {}
+
 
 def test_play_trailing_slash_disc_folder_routes_to_bdmv(monkeypatch):
     monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
@@ -101,6 +105,39 @@ def test_play_iso_under_a_bdmv_dir_uses_the_file_branch(monkeypatch):
     assert not any(kind == "play_bdmv" for kind, _ in client.calls)
 
 
+def test_play_iso_sends_stp_then_play_file(monkeypatch):
+    # Reference-aligned ISO: STP to clear prior playback, settle, then open the image -- and never
+    # routes through play_bdmv.
+    monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
+    client = _RecordingClient()
+    assert handoff.play(_cfg(), client, "nfs://h/s/Movies/Dune (2021).iso") is True
+    assert ("stop", None) in client.calls
+    assert ("play_file", "Dune (2021).iso") in client.calls
+    assert client.calls.index(("stop", None)) < client.calls.index(("play_file", "Dune (2021).iso"))
+    assert not any(kind == "play_bdmv" for kind, _ in client.calls)
+
+
+def test_play_bdmv_sends_no_stp(monkeypatch):
+    # Reference-aligned BDMV: checkfolderhasBDMV starts the disc directly -- no STP/settle ahead of it.
+    monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
+    client = _RecordingClient()  # default reply {"success": True}
+    assert handoff.play(_cfg(), client, "nfs://h/s/Movies/Dune/BDMV/index.bdmv") is True
+    assert ("play_bdmv", "Dune") in client.calls
+    assert ("stop", None) not in client.calls
+    assert not any(kind == "play_file" for kind, _ in client.calls)  # success -> no fallback
+
+
+def test_play_bdmv_falls_back_to_play_file_on_failure(monkeypatch):
+    # When checkfolderhasBDMV reports failure, fall back to /playnormalfile (reference behaviour).
+    monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
+    client = _RecordingClient(play_reply={"success": False})
+    assert handoff.play(_cfg(), client, "nfs://h/s/Movies/Dune/BDMV/index.bdmv") is False
+    assert ("play_bdmv", "Dune") in client.calls
+    assert ("play_file", "Dune") in client.calls
+    assert client.calls.index(("play_bdmv", "Dune")) < client.calls.index(("play_file", "Dune"))
+    assert ("stop", None) not in client.calls
+
+
 def _cfg_model(model):
     return Config(oppo_ip="x", path_from="nfs://h/s", path_to="srv/nfs/media", oppo_model=model)
 
@@ -114,19 +151,31 @@ def test_play_m9205_mounts_file_folder_and_plays_bare_name(monkeypatch):
     assert ("play_file", "clip.mp4") in client.calls
 
 
-def test_play_m9207_mounts_export_root_and_plays_subpath(monkeypatch):
-    # M9207 Plus / UDP-203: mount the export ROOT, play the full sub-path (hardware-verified).
+def test_play_m9207_uses_same_layout_as_m9205(monkeypatch):
+    # The M9207 NFS layout now matches the M9205 (mount the file's folder, play the bare leaf) -- the
+    # earlier export-root/sub-path mode was dropped (unverified on hardware, and the platform won't
+    # play sub-paths of a mount). oppo_model only selects the monitor transport now, not the play path.
     monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
     client = _RecordingClient()
     assert handoff.play(_cfg_model("M9207"), client, "nfs://h/s/06pr0n/clip.mp4") is True
-    assert ("mount", "srv/nfs/media") in client.calls
-    assert ("play_file", "06pr0n/clip.mp4") in client.calls
+    assert ("mount", "srv/nfs/media/06pr0n") in client.calls
+    assert ("play_file", "clip.mp4") in client.calls
 
 
-def test_play_m9207_disc_mounts_export_root_and_plays_subpath(monkeypatch):
-    # the disc-folder case follows the same root-mount rule on the M9207 Plus.
+def test_play_m9207_disc_uses_same_layout_as_m9205(monkeypatch):
+    # the disc-folder case likewise mounts the parent and plays the bare disc-folder name on the M9207.
     monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
     client = _RecordingClient()
     assert handoff.play(_cfg_model("M9207"), client, "nfs://h/s/Movies/Dune/BDMV/index.bdmv") is True
-    assert ("mount", "srv/nfs/media") in client.calls
-    assert ("play_bdmv", "Movies/Dune") in client.calls
+    assert ("mount", "srv/nfs/media/Movies") in client.calls
+    assert ("play_bdmv", "Dune") in client.calls
+
+
+def test_oppo_model_does_not_affect_play_path(monkeypatch):
+    # Invariant: oppo_model no longer changes the mount/play path -- M9205 and M9207 issue an identical
+    # call sequence. The model only selects the stop-monitor transport (see test_monitor.py).
+    monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
+    a, b = _RecordingClient(), _RecordingClient()
+    handoff.play(_cfg_model("M9205"), a, "nfs://h/s/Movies/Dune/BDMV/index.bdmv")
+    handoff.play(_cfg_model("M9207"), b, "nfs://h/s/Movies/Dune/BDMV/index.bdmv")
+    assert a.calls == b.calls and a.calls  # identical, and non-empty (actually exercised the path)

@@ -349,7 +349,8 @@ class OppoClient:
         return self._get_json(endpoint, timeout=PLAY_TIMEOUT)
 
     def stop(self) -> dict:
-        """Send STOP (clears a stuck 'bd_is_playing' before loading a new disc)."""
+        """Send STOP via the app API (/sendremotekey STP) -- clears any prior playback before loading
+        new media (sent ahead of an ISO open, reference-aligned)."""
         return self._get_json("/sendremotekey?" + urllib.parse.quote('{"key":"STP"}'))
 
     def play_bdmv(self, disc_folder_name: str, nfs: bool = True) -> dict:
@@ -470,7 +471,7 @@ class OppoClient:
         NOTE: the M9207 Plus / UDP-203 clone does NOT support a network-triggered grab -- its #POF is a
         sleep and #PON is a no-op (the unit only does a full power-on, and thus One-Touch-Play, from an
         IR/remote power button). On that hardware the grab is manual/IR; disable it via grab_tv_on_play.
-        The OPPO model (oppo_model) only affects the NFS playback layout, not this grab."""
+        The OPPO model (oppo_model) only selects the stop-monitor transport, not this grab."""
         try:
             self.send_control_command("#POF")
         except OppoError as exc:

@@ -4,8 +4,11 @@ Two-phase wait:
   Phase 1 (pre-playback) -- HTTP /getglobalinfo poll until playback STARTS. Verbose mode only carries
     useful info once the OPPO is actually playing, and the NFS mount + buffer can be slow, so the
     latency-tolerant HTTP poll owns the startup window.
-  Phase 2 (playing) -- a fresh verbose ``#SVM 3`` connection blocks until ``@UPL STOP``, pushed the
-    instant playback ends (no poll lag). Falls back to HTTP polling if the verbose channel fails.
+  Phase 2 (playing) -- stop detection, model-aware. On the M9205 a fresh verbose ``#SVM 3`` connection
+    blocks until ``@UPL STOP``, pushed the instant playback ends (no poll lag), with HTTP polling as a
+    fallback. On the M9207 Plus / UDP-203 clone the verbose channel is skipped entirely -- its :23
+    ``#SVM`` behaviour is unverified and holding that socket is implicated in the remote going
+    sluggish/locked -- so stop is detected by HTTP polling only.
 """
 from __future__ import annotations
 
@@ -24,6 +27,15 @@ def interruptible_sleep(seconds: float, should_abort) -> None:
             return
         time.sleep(min(step, seconds - waited))
         waited += step
+
+
+def _verbose_monitor_supported(config) -> bool:
+    """True when the verbose ``#SVM 3`` push watch on :23 is used for stop detection.
+
+    Only on the M9205, where it is hardware-proven. The M9207 Plus / UDP-203 clone is monitored over
+    HTTP only -- its :23 ``#SVM`` behaviour is unverified and holding that socket is implicated in the
+    remote going sluggish/locked. Independent of the NFS-layout model split in handoff.py."""
+    return str(getattr(config, "oppo_model", "M9205") or "M9205").strip().upper() != "M9207"
 
 
 def watch_playback(config, client, should_abort=None) -> bool:
@@ -46,11 +58,15 @@ def watch_playback(config, client, should_abort=None) -> bool:
     else:
         return False
 
-    log("Playback started; opening verbose (#SVM 3) for instant stop detection.")
-    try:
-        client.verbose_watch_until_stop(should_abort)
-    except OppoError as exc:
-        log("verbose watch failed ({}); falling back to HTTP polling".format(exc))
+    if _verbose_monitor_supported(config):
+        log("Playback started; opening verbose (#SVM 3) for instant stop detection.")
+        try:
+            client.verbose_watch_until_stop(should_abort)
+        except OppoError as exc:
+            log("verbose watch failed ({}); falling back to HTTP polling".format(exc))
+            _http_watch_until_idle(config, client, should_abort)
+    else:
+        log("Playback started; M9207 -> HTTP-only stop detection (no #SVM 3 on :23).")
         _http_watch_until_idle(config, client, should_abort)
     return True
 

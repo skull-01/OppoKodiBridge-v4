@@ -27,6 +27,40 @@ def test_watch_playback_observes_start_then_verbose(monkeypatch):
     assert client.verbose == 1
 
 
+def test_watch_playback_m9207_uses_http_only_never_verbose(monkeypatch):
+    # M9207 Plus / UDP-203: stop detection is HTTP-only -- the verbose #SVM 3 socket on :23 must
+    # never open (holding it is implicated in the remote locking up).
+    monkeypatch.setattr(monitor, "interruptible_sleep", lambda *a, **k: None)
+
+    class _M9207Client:
+        def __init__(self):
+            self.state_calls = 0
+
+        def is_playing(self):
+            return True  # phase 1 sees playback immediately, advances to phase 2
+
+        def verbose_watch_until_stop(self, should_abort):
+            raise AssertionError("M9207 must not open the #SVM 3 verbose channel on :23")
+
+        def playback_state(self):
+            self.state_calls += 1
+            return "idle"
+
+    client = _M9207Client()
+    cfg = Config(oppo_ip="x", oppo_model="M9207", poll_interval=2, idle_confirmations=2)
+    assert monitor.watch_playback(cfg, client) is True
+    assert client.state_calls == 2  # ended after two CONFIRMED idle HTTP reads
+
+
+def test_verbose_monitor_supported_model_gating():
+    # M9207 (any case/whitespace) -> HTTP-only (False); everything else, incl. default/None -> verbose.
+    assert monitor._verbose_monitor_supported(Config(oppo_ip="x", oppo_model="M9207")) is False
+    assert monitor._verbose_monitor_supported(Config(oppo_ip="x", oppo_model=" m9207 ")) is False
+    assert monitor._verbose_monitor_supported(Config(oppo_ip="x", oppo_model="M9205")) is True
+    assert monitor._verbose_monitor_supported(Config(oppo_ip="x")) is True  # default M9205
+    assert monitor._verbose_monitor_supported(Config(oppo_ip="x", oppo_model=None)) is True
+
+
 def test_watch_playback_gives_up_if_never_starts(monkeypatch):
     monkeypatch.setattr(monitor, "interruptible_sleep", lambda *a, **k: None)
 
