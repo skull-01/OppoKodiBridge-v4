@@ -17,6 +17,7 @@ from .oppo_http import (
     nfs_server_from_devices,
     oppo_mount_folder,
     parse_media_path,
+    reply_failed,
     split_share_relative,
 )
 
@@ -79,7 +80,7 @@ def play(config, client, kodi_file: str, should_abort=None) -> bool:
     mount_folder = oppo_mount_folder(mount_rel, config.path_to)
     log("Handoff: server={} disc={} mount={!r} play={!r}".format(server, is_disc, mount_folder, play_name))
     mount = _best_effort(lambda: client.mount_nfs(server, mount_folder), "mount")
-    if isinstance(mount, dict) and mount.get("success") is False:
+    if reply_failed(mount):
         log("mount failed ({}); re-login and retry".format(mount.get("retInfo") or mount.get("msg")))
         _best_effort(lambda: client.login_nfs(server), "re-login")
         interruptible_sleep(2.0, should_abort)
@@ -90,7 +91,7 @@ def play(config, client, kodi_file: str, should_abort=None) -> bool:
         # checkfolderhasBDMV starts the disc directly. If it does not start it, fall back to opening
         # the folder as a file (mirrors the reference's check_folder_has_bdmv -> play_file fallback).
         reply = _best_effort(lambda: client.play_bdmv(play_name), "play-bdmv")
-        if reply is None or (isinstance(reply, dict) and reply.get("success") is False):
+        if reply is None or reply_failed(reply):
             log("checkfolderhasBDMV did not start the disc; falling back to play_file")
             reply = _best_effort(lambda: client.play_file(server, play_name), "play-bdmv-fallback")
     elif is_iso_file:
@@ -109,7 +110,7 @@ def play(config, client, kodi_file: str, should_abort=None) -> bool:
         # will never start.
         log("OPPO play call failed (no reply); not waiting for playback")
         return False
-    if isinstance(reply, dict) and reply.get("success") is False:
+    if reply_failed(reply):
         log("OPPO rejected the file: {}".format(reply.get("retInfo") or reply.get("msg") or ""))
         return False
     return True

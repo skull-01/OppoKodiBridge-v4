@@ -138,6 +138,24 @@ def test_play_bdmv_falls_back_to_play_file_on_failure(monkeypatch):
     assert ("stop", None) not in client.calls
 
 
+def test_play_returns_false_on_non_bool_failure(monkeypatch):
+    # A firmware that rejects the file with a non-bool success (e.g. 0 / "false") must be honored as a
+    # rejection -- previously `success is False` missed it and play() wrongly returned True (accepted),
+    # leaving the monitor polling for playback that never starts.
+    monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
+    assert handoff.play(_cfg(), _FakeClient(play_reply={"success": 0}), "nfs://h/s/01Movies/x.iso") is False
+    assert handoff.play(_cfg(), _FakeClient(play_reply={"success": "false"}), "nfs://h/s/01Movies/x.iso") is False
+
+
+def test_play_bdmv_falls_back_on_non_bool_failure(monkeypatch):
+    # checkfolderhasBDMV failure reported as a non-bool also triggers the play_file fallback.
+    monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
+    client = _RecordingClient(play_reply={"success": 0})
+    assert handoff.play(_cfg(), client, "nfs://h/s/Movies/Dune/BDMV/index.bdmv") is False
+    assert ("play_bdmv", "Dune") in client.calls
+    assert ("play_file", "Dune") in client.calls  # fell back despite the non-bool failure
+
+
 def test_play_loose_bdmv_mounts_containing_dir_not_the_file(monkeypatch):
     # A bare .bdmv NOT under a BDMV/ folder must mount the dir that CONTAINS it (a real folder) and
     # open that folder -- never NFS-mount the .bdmv FILE's own path, which hard-crashes the OPPO.

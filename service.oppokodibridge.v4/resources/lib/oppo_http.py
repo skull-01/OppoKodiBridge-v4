@@ -171,6 +171,28 @@ def info_is_playing(info: Any) -> bool:
     return False
 
 
+_FALSE_TOKENS = ("0", "false", "no", "off")
+
+
+def reply_failed(reply: Any) -> bool:
+    """True when an OPPO JSON reply's ``success`` field reports failure.
+
+    The app API is community-reverse-engineered and loosely typed -- ``success`` can come back as a
+    real bool ``false``, an int ``0``, or a string ``"false"`` / ``"0"`` depending on firmware (the
+    same module already coerces such variants for the playback flags in ``info_is_playing``). A plain
+    ``reply.get("success") is False`` only matches a genuine bool, so a non-bool failure slipped
+    through and was treated as success. A MISSING ``success`` is NOT a failure (the device often omits
+    it on success), preserving the prior "only an explicit failure counts" behaviour."""
+    if not isinstance(reply, dict) or "success" not in reply:
+        return False
+    value = reply.get("success")
+    if isinstance(value, bool):
+        return not value
+    if isinstance(value, (int, float)):
+        return value == 0
+    return str(value).strip().lower() in _FALSE_TOKENS
+
+
 _PLAYBACK_ENDED_STATUSES = {"STOP", "HOME", "NONE", "NODISC", "NO_DISC", "CLOSE"}
 
 

@@ -114,6 +114,25 @@ def test_info_is_playing_real_fields():
     assert not oh.info_is_playing({})
 
 
+def test_reply_failed_coerces_non_bool_success():
+    # explicit failure in every shape the loosely-typed app API can return
+    assert oh.reply_failed({"success": False})
+    assert oh.reply_failed({"success": 0})
+    assert oh.reply_failed({"success": "false"})
+    assert oh.reply_failed({"success": "0"})
+    assert oh.reply_failed({"success": "no"})
+    assert oh.reply_failed({"success": "OFF"})
+    # success (any truthy shape) is NOT a failure
+    assert not oh.reply_failed({"success": True})
+    assert not oh.reply_failed({"success": 1})
+    assert not oh.reply_failed({"success": "true"})
+    # a missing success / non-dict is NOT a failure (the device omits it on success)
+    assert not oh.reply_failed({})
+    assert not oh.reply_failed({"retInfo": "ok"})
+    assert not oh.reply_failed(None)
+    assert not oh.reply_failed("raw text")
+
+
 def _client():
     return oh.OppoClient(Config(oppo_ip="1.2.3.4"))
 
