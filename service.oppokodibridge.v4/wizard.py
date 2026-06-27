@@ -63,6 +63,14 @@ class _KodiSettings:
         except Exception:
             return ""
 
+    def get_bool(self, key):
+        # wizard_done is a boolean setting -> must be read with the typed bool getter (getSettingString
+        # returns "" for a boolean setting in Kodi).
+        try:
+            return bool(self._a.getSettingBool(key))
+        except Exception:
+            return False
+
     def set(self, key, value):
         try:
             if isinstance(value, bool):
@@ -79,8 +87,8 @@ class _KodiSettings:
 def main(argv):
     only_if_unfinished = len(argv) > 1 and argv[1] == "firstrun"
     settings = _KodiSettings()
-    if only_if_unfinished and (settings.get("wizard_done") or "").lower() in ("true", "1"):
-        return  # already completed -> don't auto-pop the wizard again
+    if only_if_unfinished and settings.get_bool("wizard_done"):
+        return  # already completed/dismissed -> don't auto-pop the wizard again
     wizard_lib.run_wizard(_KodiUI(), lambda cfg: OppoClient(cfg), settings)
 
 

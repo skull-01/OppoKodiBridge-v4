@@ -107,7 +107,9 @@ def _maybe_launch_first_run_wizard() -> None:
     import xbmcaddon
 
     try:
-        done = (xbmcaddon.Addon(ADDON_ID).getSettingString("wizard_done") or "").lower() in ("true", "1")
+        # wizard_done is a boolean setting -> read it with the typed getter. getSettingString on a
+        # boolean setting returns "" in Kodi, which would make this always re-launch.
+        done = bool(xbmcaddon.Addon(ADDON_ID).getSettingBool("wizard_done"))
     except Exception as exc:  # pragma: no cover - hardware path
         log("wizard flag read failed ({}); skipping auto-launch".format(exc))
         return

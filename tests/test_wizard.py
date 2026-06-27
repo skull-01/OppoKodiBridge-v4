@@ -1,5 +1,9 @@
 """The first-run wizard: pure path-detection helpers + the guided flow driven through fake UI / client /
 settings adapters (the real xbmcgui adapter in wizard.py at the add-on root is Kodi-only)."""
+import importlib
+import sys
+import types
+
 from resources.lib import wizard
 from resources.lib.config import Config
 
@@ -156,3 +160,43 @@ def test_wizard_no_path_detected_is_graceful():
     assert summary["bdmv"]["detected"] is None
     assert "detected_iso_path" not in settings.store   # nothing captured
     assert summary["completed"] is True                 # wizard still finishes
+
+
+# --- the Kodi settings adapter: wizard_done must round-trip as a BOOLEAN (regression) -------------
+
+def _typed_xbmcaddon():
+    """A fake xbmcaddon modelling Kodi's TYPE-CHECKED getters: getSettingString on a boolean-typed
+    setting returns "" (the trap), getSettingBool returns the stored bool."""
+    mod = types.ModuleType("xbmcaddon")
+
+    class Addon:
+        def __init__(self, addon_id=None):
+            self._store = {}
+
+        def setSettingBool(self, key, value):
+            self._store[key] = ("bool", bool(value))
+
+        def setSettingString(self, key, value):
+            self._store[key] = ("str", str(value))
+
+        def getSettingBool(self, key):
+            kind, val = self._store.get(key, ("bool", False))
+            return val if kind == "bool" else False
+
+        def getSettingString(self, key):
+            kind, val = self._store.get(key, ("str", ""))
+            return val if kind == "str" else ""   # typed mismatch -> "" (Kodi behaviour)
+
+    mod.Addon = Addon
+    return mod
+
+
+def test_kodisettings_wizard_done_roundtrips_as_bool(monkeypatch):
+    # wizard_done is written as a bool (setSettingBool) and MUST be read with getSettingBool. Reading it
+    # via getSettingString returns "" for a boolean setting, which defeated the "don't nag again" guard.
+    monkeypatch.setitem(sys.modules, "xbmcaddon", _typed_xbmcaddon())
+    entry = importlib.import_module("wizard")   # the add-on-root entry (NOT resources.lib.wizard)
+    s = entry._KodiSettings()
+    s.set("wizard_done", True)
+    assert s.get_bool("wizard_done") is True    # the fix: typed bool read sees it
+    assert s.get("wizard_done") == ""           # getSettingString on a bool setting -> "" (the old bug)
