@@ -50,7 +50,7 @@
     <!-- PLAY: orchestrator actions -->
     <g><rect class="grab" x="250" y="236" width="175" height="50" rx="8"/><text class="t tg" x="337" y="257" text-anchor="middle">cec.grab_oppo</text><text class="ts tgs" x="337" y="273" text-anchor="middle">M9205 only · #POF→#PON</text></g>
     <g><rect class="box" x="250" y="300" width="175" height="50" rx="8"/><text class="t" x="337" y="321" text-anchor="middle">handoff.play</text><text class="ts" x="337" y="337" text-anchor="middle">HTTP :436 · NFS · play</text></g>
-    <g><rect class="box" x="250" y="364" width="175" height="50" rx="8"/><text class="t" x="337" y="385" text-anchor="middle">monitor.watch</text><text class="ts" x="337" y="401" text-anchor="middle">until stop · bounded (4.1.1)</text></g>
+    <g><rect class="box" x="250" y="364" width="175" height="50" rx="8"/><text class="t" x="337" y="385" text-anchor="middle">monitor.watch</text><text class="ts" x="337" y="401" text-anchor="middle">poll /getglobalinfo until idle</text></g>
     <line class="a" x1="210" y1="257" x2="250" y2="259" marker-end="url(#aN)"/>
     <line class="a" x1="337" y1="286" x2="337" y2="300" marker-end="url(#aN)"/>
     <line class="a" x1="337" y1="350" x2="337" y2="364" marker-end="url(#aN)"/>

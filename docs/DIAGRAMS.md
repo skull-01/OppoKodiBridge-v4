@@ -151,3 +151,58 @@ sequenceDiagram
 
 > **Asymmetry to remember:** *manual* TV switch **to** the OPPO on play, *automatic* switch **back** to
 > Kodi on stop. The M9205 differs only on the play side (it grabs the TV automatically too).
+
+---
+
+## 4 · User journey — M9205
+
+On the M9205 the OPPO grabs the TV itself (its `#PON` actually powers on), so the journey is **fully
+automatic on both sides** — no manual step. It differs from the M9207 only on the play side (the grab);
+stop detection is the same HTTP `/getglobalinfo` poll for both (since v4.1.3).
+
+![OppoKodiBridge v4 M9205 user journey](diagrams/oppokodibridge-v4-m9205-journey.svg)
+
+> If the image above doesn't render, open the SVG directly:
+> [`docs/diagrams/oppokodibridge-v4-m9205-journey.svg`](diagrams/oppokodibridge-v4-m9205-journey.svg)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor You as You (remote)
+    participant TV
+    participant Kodi
+    participant Player as pcf_player.py (orchestrator)
+    participant OPPO
+    participant Helper as script.cecreclaim
+
+    You->>Kodi: Play a disc (.iso / BDMV / VIDEO_TS)
+    Kodi->>Player: spawn external player (no blip)
+
+    rect rgb(231, 244, 238)
+    Note over Player,TV: Play side — automatic grab (M9205)
+    Player->>OPPO: cec.grab_oppo — power-cycle (#POF then #PON)
+    OPPO-->>TV: HDMI-CEC One-Touch-Play (OPPO's own source)
+    Note over TV: TV switches to the OPPO input automatically
+    end
+
+    Player->>OPPO: handoff.play — wake, init, NFS mount, play (:436)
+    OPPO-->>You: disc plays on the TV
+    loop until stop (HTTP only)
+        Player->>OPPO: poll /getglobalinfo (never opens :23)
+    end
+    You->>OPPO: press Stop (or the disc ends)
+    OPPO-->>Player: playback ended
+
+    rect rgb(233, 240, 254)
+    Note over Player,TV: Stop side — automatic (works on every model)
+    Player->>Kodi: cec.reclaim_kodi — JSON-RPC Addons.ExecuteAddon(script.cecreclaim)
+    Kodi->>Helper: run the helper add-on
+    Helper->>Kodi: xbmc.executebuiltin("CECActivateSource")
+    Kodi-->>TV: HDMI-CEC active source (Kodi's own source)
+    Note over TV: TV returns to Kodi automatically
+    end
+```
+
+> **M9205 vs M9207:** identical except step 2–3 — the M9205 grabs the TV automatically (power-cycle),
+> the M9207 needs a manual TV switch. Everything else, including HTTP-only stop detection and the
+> automatic reclaim, is the same.
