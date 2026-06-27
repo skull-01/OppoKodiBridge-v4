@@ -48,3 +48,24 @@ Off-box suite: **86 passed**. The verbose `#SVM 3` watch on `:23` is removed; st
 |---|-------------|-------|---------------------|
 | 9 | [#6](https://github.com/skull-01/OppoKodiBridge-v4/issues/6) | **M9205 (if available), `oppo_model=M9205`:** play a disc, let it run, press Stop. | Playback is detected, the stop is detected within a few seconds over HTTP, and Kodi reclaims the TV. The OPPO's `:23` port is **never** opened for monitoring (only `#POF`/`#PON` on the grab). No remote sluggishness. |
 | 10 | [#6](https://github.com/skull-01/OppoKodiBridge-v4/issues/6) | **M9207 (your unit):** play→stop cycle. | No change from v4.1.2 — HTTP-only stop detection, remote stays responsive. Regression check only. |
+
+---
+
+## Auto-detect `path_from` from Kodi sources — v4.1.7
+
+Off-box suite: **124 passed** (`PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q`). Detection is
+**detect-as-fallback**: the typed *Kodi path prefix* (`path_from`, NAS path mapping) stays authoritative
+and is used whenever it maps the played file — Kodi is queried only when that field is blank or doesn't
+match. Requires Kodi's JSON-RPC / web server enabled (already needed for the CEC reclaim). 5-lens
+adversarial re-audit + a clean recursion pass; two HIGH issues found pre-release and fixed
+(detect-first → detect-as-fallback; exact-equal source strand).
+
+| # | Issue / SHA | Check | What you should see |
+|---|-------------|-------|---------------------|
+| 11 | [#9](https://github.com/skull-01/OppoKodiBridge-v4/issues/9) `cd9f7f7` | **Regression (most important):** leave your **existing, correctly-typed** `path_from` as-is, "Auto-detect the Kodi path prefix" ON (default), and play a disc/file you normally play. | Plays **exactly as before** — the typed value is authoritative and is NOT overridden. The Kodi log shows **no** `path_from auto-detected…` line for this play (Kodi isn't even queried when the typed prefix maps). |
+| 12 | [#9](https://github.com/skull-01/OppoKodiBridge-v4/issues/9) `cd9f7f7` `bfb9d59` | **Zero-config:** blank the *Kodi path prefix* field (or set it deliberately wrong), keep auto-detect ON, then play a file that lives under one of your Kodi **video sources**. | The add-on auto-fills `path_from` from Kodi's sources and the file hands off + plays. The Kodi log shows `path_from auto-detected from Kodi sources: '…' (typed prefix did not map)`. (Needs the file to be under a configured Kodi video source; UPnP/plugin paths won't map — that's expected.) |
+| 13 | [#9](https://github.com/skull-01/OppoKodiBridge-v4/issues/9) `bfb9d59` | **Toggle off:** with the *Kodi path prefix* still blank/wrong, turn "Auto-detect the Kodi path prefix" **OFF**, and play. | Playback is **not** handed off (the log shows `Cannot map …`); no Kodi sources query is made. Turning the toggle back ON (or fixing the typed field) restores the handoff. |
+
+> Detects `path_from` only — `path_to` (the OPPO export root) and the mount point still need the
+> on-device probe (issues #11/#14). Only the operator closes issues; each row's SHA is commented on #9
+> and it carries `status:awaiting-verify`.
