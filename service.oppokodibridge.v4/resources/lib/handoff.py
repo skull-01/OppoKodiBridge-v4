@@ -52,8 +52,8 @@ def play(config, client, kodi_file: str, should_abort=None) -> bool:
     target = detector.disc_folder(rel + "/") if is_disc else rel
     # Mount the target's PARENT folder, play its bare leaf name (/mnt/nfs1/<leaf>). The OPPO won't play
     # sub-paths of a mount, so this is the only layout proven on the UDP-203 platform (live on the
-    # M9205; the M9207 Plus uses it too). oppo_model does not change the play path -- it gates the
-    # stop-monitor transport (monitor._verbose_monitor_supported) and the TV grab (cec.grab_supported).
+    # M9205; the M9207 Plus uses it too). oppo_model does not change the play path -- it now gates only
+    # the TV grab (cec.grab_supported); stop detection is HTTP-only for every model.
     mount_rel, play_name = target.rsplit("/", 1) if "/" in target else ("", target)
 
     if not client.wake_and_wait():

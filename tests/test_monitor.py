@@ -1,64 +1,52 @@
-"""The monitor: poll until playing, then hold the verbose channel until stop; give up if playback
-never starts. Asserts nothing about CEC -- it only observes."""
+"""The monitor: poll /getglobalinfo until playing, then poll until idle; give up if playback never
+starts. HTTP-only for every model (the verbose #SVM 3 channel on :23 is never opened). Asserts nothing
+about CEC -- it only observes."""
 from resources.lib import monitor
 from resources.lib.config import Config
 
 
 class _Client:
-    def __init__(self, plays_on=1):
+    """Phase 1 starts playing after ``plays_on`` reads; phase 2 then serves ``states`` for playback_state.
+
+    Defines verbose_watch_until_stop so that, if the monitor ever regressed to opening the #SVM 3
+    channel, the test would fail loudly -- the HTTP-only monitor must never call it."""
+
+    def __init__(self, plays_on=1, states=("idle", "idle")):
         self.n = 0
         self.plays_on = plays_on
-        self.verbose = 0
+        self.states = list(states)
+        self.i = 0
+        self.state_calls = 0
 
     def is_playing(self):
         self.n += 1
         return self.n >= self.plays_on
 
+    def playback_state(self):
+        self.state_calls += 1
+        s = self.states[self.i] if self.i < len(self.states) else self.states[-1]
+        self.i += 1
+        return s
+
     def verbose_watch_until_stop(self, should_abort):
-        self.verbose += 1
-        return True
+        raise AssertionError("HTTP-only monitor must never open the #SVM 3 verbose channel on :23")
 
 
-def test_watch_playback_observes_start_then_verbose(monkeypatch):
+def test_watch_playback_starts_then_http_watch(monkeypatch):
     monkeypatch.setattr(monitor, "interruptible_sleep", lambda *a, **k: None)
-    client = _Client(plays_on=1)
+    client = _Client(plays_on=1, states=["idle", "idle"])
     cfg = Config(oppo_ip="x", poll_interval=2, idle_confirmations=2)
     assert monitor.watch_playback(cfg, client) is True
-    assert client.verbose == 1
+    assert client.state_calls == 2  # ended after two CONFIRMED idle HTTP reads; verbose never opened
 
 
-def test_watch_playback_m9207_uses_http_only_never_verbose(monkeypatch):
-    # M9207 Plus / UDP-203: stop detection is HTTP-only -- the verbose #SVM 3 socket on :23 must
-    # never open (holding it is implicated in the remote locking up).
+def test_watch_playback_http_only_for_default_model(monkeypatch):
+    # The default model (M9205) is now ALSO HTTP-only -- no verbose channel for any model.
     monkeypatch.setattr(monitor, "interruptible_sleep", lambda *a, **k: None)
-
-    class _M9207Client:
-        def __init__(self):
-            self.state_calls = 0
-
-        def is_playing(self):
-            return True  # phase 1 sees playback immediately, advances to phase 2
-
-        def verbose_watch_until_stop(self, should_abort):
-            raise AssertionError("M9207 must not open the #SVM 3 verbose channel on :23")
-
-        def playback_state(self):
-            self.state_calls += 1
-            return "idle"
-
-    client = _M9207Client()
-    cfg = Config(oppo_ip="x", oppo_model="M9207", poll_interval=2, idle_confirmations=2)
+    client = _Client(plays_on=1, states=["playing", "idle", "idle"])
+    cfg = Config(oppo_ip="x", oppo_model="M9205", poll_interval=2, idle_confirmations=2)
     assert monitor.watch_playback(cfg, client) is True
-    assert client.state_calls == 2  # ended after two CONFIRMED idle HTTP reads
-
-
-def test_verbose_monitor_supported_model_gating():
-    # M9207 (any case/whitespace) -> HTTP-only (False); everything else, incl. default/None -> verbose.
-    assert monitor._verbose_monitor_supported(Config(oppo_ip="x", oppo_model="M9207")) is False
-    assert monitor._verbose_monitor_supported(Config(oppo_ip="x", oppo_model=" m9207 ")) is False
-    assert monitor._verbose_monitor_supported(Config(oppo_ip="x", oppo_model="M9205")) is True
-    assert monitor._verbose_monitor_supported(Config(oppo_ip="x")) is True  # default M9205
-    assert monitor._verbose_monitor_supported(Config(oppo_ip="x", oppo_model=None)) is True
+    assert client.state_calls == 3
 
 
 def test_watch_playback_gives_up_if_never_starts(monkeypatch):
@@ -68,8 +56,8 @@ def test_watch_playback_gives_up_if_never_starts(monkeypatch):
         def is_playing(self):
             return False
 
-        def verbose_watch_until_stop(self, should_abort):
-            raise AssertionError("verbose must not open if playback never started")
+        def playback_state(self):
+            raise AssertionError("phase 2 must not run if playback never started")
 
     cfg = Config(oppo_ip="x", poll_interval=2, idle_confirmations=2)  # grace = max(2, 10) = 10 polls
     assert monitor.watch_playback(cfg, Never()) is False
@@ -81,51 +69,30 @@ def test_watch_playback_aborts(monkeypatch):
     assert monitor.watch_playback(cfg, _Client(plays_on=999), should_abort=lambda: True) is False
 
 
-class _FallbackClient:
-    """Forces the HTTP fallback (verbose raises) and serves a scripted playback_state sequence."""
-
-    def __init__(self, states):
-        self.states = list(states)
-        self.i = 0
-        self.state_calls = 0
-
-    def is_playing(self):
-        return True  # phase 1 sees playback immediately, so the watch advances to phase 2
-
-    def verbose_watch_until_stop(self, should_abort):
-        raise monitor.OppoError("verbose down -> HTTP fallback")
-
-    def playback_state(self):
-        self.state_calls += 1
-        s = self.states[self.i] if self.i < len(self.states) else self.states[-1]
-        self.i += 1
-        return s
-
-
-def test_http_fallback_transient_unknown_is_not_a_stop(monkeypatch):
+def test_http_transient_unknown_is_not_a_stop(monkeypatch):
     # b4: a swallowed transport error ("unknown") must NOT count as idle -> no premature reclaim.
     monkeypatch.setattr(monitor, "interruptible_sleep", lambda *a, **k: None)
-    client = _FallbackClient(["unknown", "unknown", "playing", "idle", "idle"])
+    client = _Client(plays_on=1, states=["unknown", "unknown", "playing", "idle", "idle"])
     cfg = Config(oppo_ip="x", poll_interval=2, idle_confirmations=2)
     assert monitor.watch_playback(cfg, client) is True
     # ended only after the two CONFIRMED idles (5 reads); the unknowns did not trip the stop early.
     assert client.state_calls == 5
 
 
-def test_http_fallback_gives_up_when_oppo_unreadable(monkeypatch):
+def test_http_gives_up_when_oppo_unreadable(monkeypatch):
     # b3/b4: a permanently-unreadable OPPO must still end the watch so the reclaim fires.
     monkeypatch.setattr(monitor, "interruptible_sleep", lambda *a, **k: None)
-    client = _FallbackClient(["unknown"])
+    client = _Client(plays_on=1, states=["unknown"])
     cfg = Config(oppo_ip="x", poll_interval=2, idle_confirmations=2, max_read_failures=3)
     assert monitor.watch_playback(cfg, client) is True
     assert client.state_calls == 3  # gave up after max_read_failures unreadable polls
 
 
-def test_http_fallback_bounded_when_playing_flag_sticks(monkeypatch):
+def test_http_bounded_when_playing_flag_sticks(monkeypatch):
     # b3: if playback_state sticks "playing" forever, the wall-clock ceiling still returns so the
     # external-player process can't hang and the orchestrator's reclaim runs.
     monkeypatch.setattr(monitor, "interruptible_sleep", lambda *a, **k: None)
-    client = _FallbackClient(["playing"])
+    client = _Client(plays_on=1, states=["playing"])
     cfg = Config(oppo_ip="x", poll_interval=5, idle_confirmations=2, max_watch_seconds=20)
     assert monitor.watch_playback(cfg, client) is True
     assert client.state_calls == 4  # ceil(20/5) poll ceiling, never unbounded

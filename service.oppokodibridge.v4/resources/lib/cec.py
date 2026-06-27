@@ -31,7 +31,8 @@ def grab_supported(config) -> bool:
     power-cycle never grabs AND wedges the unit -- it puts the box to sleep then can't wake it, which is
     the sluggish/locked IR remote during playback. So on the M9207 the grab is skipped ENTIRELY
     (regardless of ``grab_tv_on_play``) and the TV is switched to the OPPO input manually. Model-gated,
-    default M9205; mirrors monitor._verbose_monitor_supported."""
+    default M9205. (Stop detection is HTTP-only for every model, so ``oppo_model`` now affects only
+    this grab.)"""
     return str(getattr(config, "oppo_model", "M9205") or "M9205").strip().upper() != "M9207"
 
 

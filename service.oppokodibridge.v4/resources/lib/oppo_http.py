@@ -193,25 +193,6 @@ def reply_failed(reply: Any) -> bool:
     return str(value).strip().lower() in _FALSE_TOKENS
 
 
-_PLAYBACK_ENDED_STATUSES = {"STOP", "HOME", "NONE", "NODISC", "NO_DISC", "CLOSE"}
-
-
-def upl_status(line):
-    """Parse an OPPO verbose-mode ``@UPL`` line -> its status token (PLAY / STOP / HOME / PAUS / ...),
-    or None if the line is not an ``@UPL`` message. e.g. ``@UPL PLAY`` -> ``"PLAY"``."""
-    text = str(line).strip()
-    if not text.startswith("@UPL"):
-        return None
-    rest = text[4:].strip()
-    return rest.split()[0].upper() if rest else ""
-
-
-def upl_means_ended(line):
-    """True when an ``@UPL`` line reports playback has ended (STOP / HOME / no disc)."""
-    status = upl_status(line)
-    return status is not None and status in _PLAYBACK_ENDED_STATUSES
-
-
 _BAUD_CONSTS = {
     2400: "B2400", 4800: "B4800", 9600: "B9600", 19200: "B19200",
     38400: "B38400", 57600: "B57600", 115200: "B115200",
@@ -404,80 +385,6 @@ class OppoClient:
         except OppoError:
             return "unknown"
         return "playing" if info_is_playing(info) else "idle"
-
-    def verbose_watch_until_stop(self, should_abort=None) -> bool:
-        """Hold a verbose-mode (``#SVM 3``) connection on :23 and block until the OPPO reports
-        playback stopped (``@UPL STOP`` / ``HOME``). Push-based, so a recognised stop token is detected
-        within line latency, not a poll interval.
-
-        Two backstops guarantee the watch always returns -- so the orchestrator's finally still
-        reclaims the TV and the external-player process / the IR remote can never wedge on a held :23
-        socket (the documented remote-lockup failure):
-          * an HTTP /getglobalinfo cross-check on a wall-clock cadence, run REGARDLESS of whether the
-            push stream is flowing -- so a stop the device reports only over HTTP, or via an ``@UPL``
-            token this parser does not recognise, is still caught while verbose chatter keeps the
-            socket busy. Only a run of ``idle_confirmations`` CONFIRMED-idle reads ends the watch; a
-            single "playing"/"unknown" resets the run, so a transient HTTP blip never triggers a
-            premature mid-playback reclaim.
-          * an absolute ``max_watch_seconds`` ceiling -- a final stop in case neither the push stream
-            nor HTTP ever reports idle.
-
-        Call only AFTER playback has started (use HTTP for the pre-playback wait). Sends ``#SVM 0`` and
-        closes on exit. Returns True when playback ended."""
-        if should_abort is None:
-            should_abort = lambda: False
-        interval = max(2.0, float(getattr(self.cfg, "poll_interval", 5.0) or 5.0))
-        needed = max(1, int(getattr(self.cfg, "idle_confirmations", 2) or 1))
-        max_watch = float(getattr(self.cfg, "max_watch_seconds", 21600.0) or 0.0)
-        try:
-            conn = socket.create_connection((self.cfg.oppo_ip, 23), timeout=5.0)
-        except OSError as exc:
-            raise OppoError("verbose :23 connect failed: {}".format(exc)) from exc
-        try:
-            try:
-                conn.sendall(b"#SVM 3\r")
-                conn.settimeout(1.0)
-                buf = ""
-                start = time.time()
-                last_check = start
-                idle_hits = 0
-                while not should_abort():
-                    now = time.time()
-                    # Absolute ceiling: never hold the :23 socket forever, even if the device streams
-                    # chatter without a recognised @UPL end token and HTTP never reports idle.
-                    if max_watch > 0 and now - start > max_watch:
-                        log("verbose watch hit the {:.0f}s ceiling; ending so the TV is reclaimed.".format(max_watch))
-                        return True
-                    # Wall-clock HTTP cross-check, independent of the push stream (fires while chatter
-                    # flows, not only when the stream goes quiet).
-                    if now - last_check >= interval:
-                        last_check = now
-                        if self.playback_state() == "idle":
-                            idle_hits += 1
-                            if idle_hits >= needed:
-                                return True  # only CONFIRMED idle reads end the watch
-                        else:
-                            idle_hits = 0  # "playing"/"unknown" -> never reclaim on an unconfirmed read
-                    try:
-                        chunk = conn.recv(512).decode("ascii", errors="replace")
-                    except socket.timeout:
-                        continue
-                    if not chunk:
-                        return True  # connection dropped -> treat as ended
-                    buf += chunk
-                    while "\r" in buf:
-                        line, buf = buf.split("\r", 1)
-                        if upl_means_ended(line):
-                            return True
-                return True
-            except OSError as exc:  # a dropped :23 connection -> OppoError so the monitor's HTTP fallback runs
-                raise OppoError("verbose :23 dropped: {}".format(exc)) from exc
-        finally:
-            try:
-                conn.sendall(b"#SVM 0\r")
-            except OSError:
-                pass
-            conn.close()
 
     def send_tcp_command(self, command: str, timeout: float = 5.0) -> str:
         """Send an OPPO IP-control command on :23 (e.g. #PON / #POF) and return the reply."""

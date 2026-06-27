@@ -1,21 +1,20 @@
 """Watch OPPO playback state -- reports what is happening, asserts nothing.
 
-Two-phase wait:
-  Phase 1 (pre-playback) -- HTTP /getglobalinfo poll until playback STARTS. Verbose mode only carries
-    useful info once the OPPO is actually playing, and the NFS mount + buffer can be slow, so the
-    latency-tolerant HTTP poll owns the startup window.
-  Phase 2 (playing) -- stop detection, model-aware. On the M9205 a fresh verbose ``#SVM 3`` connection
-    blocks until ``@UPL STOP``, pushed the instant playback ends (no poll lag), with HTTP polling as a
-    fallback. On the M9207 Plus / UDP-203 clone the verbose channel is skipped entirely -- its :23
-    ``#SVM`` behaviour is unverified and holding that socket is implicated in the remote going
-    sluggish/locked -- so stop is detected by HTTP polling only.
+Two-phase wait, both over HTTP ``/getglobalinfo`` -- the reference-faithful approach (the proven
+emby-chinoppo-bridge monitors purely over HTTP). The OPPO's verbose ``#SVM 3`` channel on :23 is never
+opened: it carries no value the HTTP poll doesn't, its behaviour on the UDP-203 clones is unverified,
+and holding that socket is implicated in the IR remote going sluggish/locked during playback.
+
+  Phase 1 (pre-playback) -- poll until playback STARTS. The NFS mount + buffer can be slow, so this is
+    latency-tolerant; it gives up after a grace run of polls if playback never starts.
+  Phase 2 (playing) -- poll until the OPPO is idle for N consecutive reads, then return so the
+    orchestrator reclaims the TV.
 """
 from __future__ import annotations
 
 import time
 
 from .kodilog import log
-from .oppo_http import OppoError
 
 
 def interruptible_sleep(seconds: float, should_abort) -> None:
@@ -27,15 +26,6 @@ def interruptible_sleep(seconds: float, should_abort) -> None:
             return
         time.sleep(min(step, seconds - waited))
         waited += step
-
-
-def _verbose_monitor_supported(config) -> bool:
-    """True when the verbose ``#SVM 3`` push watch on :23 is used for stop detection.
-
-    Only on the M9205, where it is hardware-proven. The M9207 Plus / UDP-203 clone is monitored over
-    HTTP only -- its :23 ``#SVM`` behaviour is unverified and holding that socket is implicated in the
-    remote going sluggish/locked. Independent of the NFS-layout model split in handoff.py."""
-    return str(getattr(config, "oppo_model", "M9205") or "M9205").strip().upper() != "M9207"
 
 
 def watch_playback(config, client, should_abort=None) -> bool:
@@ -58,21 +48,13 @@ def watch_playback(config, client, should_abort=None) -> bool:
     else:
         return False
 
-    if _verbose_monitor_supported(config):
-        log("Playback started; opening verbose (#SVM 3) for instant stop detection.")
-        try:
-            client.verbose_watch_until_stop(should_abort)
-        except OppoError as exc:
-            log("verbose watch failed ({}); falling back to HTTP polling".format(exc))
-            _http_watch_until_idle(config, client, should_abort)
-    else:
-        log("Playback started; M9207 -> HTTP-only stop detection (no #SVM 3 on :23).")
-        _http_watch_until_idle(config, client, should_abort)
+    log("Playback started; watching for stop over HTTP /getglobalinfo (no #SVM 3 on :23).")
+    _http_watch_until_idle(config, client, should_abort)
     return True
 
 
 def _http_watch_until_idle(config, client, should_abort) -> None:
-    """Fallback for phase 2: poll /getglobalinfo until the OPPO is idle for N consecutive reads.
+    """Phase 2: poll /getglobalinfo until the OPPO is idle for N consecutive reads.
 
     Uses the tri-state ``playback_state`` so a transport blip ("unknown") is NOT mistaken for a stop:
     only a confirmed-idle read counts toward the idle confirmations, so a brief network/HTTP failure
