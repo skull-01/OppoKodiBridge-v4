@@ -38,6 +38,30 @@ def test_run_reclaims_even_when_play_fails(monkeypatch):
     assert "reclaim" in order and "watch" not in order  # reclaim fires in finally; watch skipped
 
 
+def test_run_skips_grab_on_m9207_even_when_enabled(monkeypatch):
+    # M9207 hard-disables the OPPO CEC grab regardless of grab_tv_on_play (its power-cycle is a no-op
+    # that wedges the unit). play/watch/reclaim still run; the TV is switched to the OPPO manually.
+    order = []
+    _wire(monkeypatch, order)
+    monkeypatch.setattr(orchestrator.handoff, "play", lambda *a, **k: order.append("play") or True)
+    cfg = Config(oppo_ip="x", grab_tv_on_play=True, oppo_model="M9207", cec_reclaim_on_stop=True,
+                 path_from="nfs://h/s", path_to="srv")
+    assert orchestrator.run(cfg, "nfs://h/s/01Movies/Dune (2021).iso") is True
+    assert "grab" not in order
+    assert order == ["play", "watch", "reclaim"]
+
+
+def test_run_grabs_on_m9205_when_enabled(monkeypatch):
+    # the grab-capable model still grabs when grab_tv_on_play is on.
+    order = []
+    _wire(monkeypatch, order)
+    monkeypatch.setattr(orchestrator.handoff, "play", lambda *a, **k: order.append("play") or True)
+    cfg = Config(oppo_ip="x", grab_tv_on_play=True, oppo_model="M9205",
+                 path_from="nfs://h/s", path_to="srv")
+    assert orchestrator.run(cfg, "nfs://h/s/x.iso") is True
+    assert order == ["grab", "play", "watch", "reclaim"]
+
+
 def test_run_no_grab_when_disabled(monkeypatch):
     order = []
     _wire(monkeypatch, order)

@@ -22,6 +22,19 @@ from .oppo_http import OppoClient, OppoError  # noqa: F401 (OppoClient re-export
 RECLAIM_ADDON = "script.cecreclaim"
 
 
+def grab_supported(config) -> bool:
+    """True when the OPPO can grab the TV over the network -- i.e. a ``#POF`` -> ``#PON`` power-cycle
+    fires its OWN One-Touch-Play (genuine OPPO; verified on a TCL Q9L).
+
+    False for the M9207 Plus / UDP-203 clone: its ``#POF`` is a sleep and ``#PON`` is a no-op (it only
+    powers on, and thus asserts active source, from an IR/remote power button). On that hardware the
+    power-cycle never grabs AND wedges the unit -- it puts the box to sleep then can't wake it, which is
+    the sluggish/locked IR remote during playback. So on the M9207 the grab is skipped ENTIRELY
+    (regardless of ``grab_tv_on_play``) and the TV is switched to the OPPO input manually. Model-gated,
+    default M9205; mirrors monitor._verbose_monitor_supported."""
+    return str(getattr(config, "oppo_model", "M9205") or "M9205").strip().upper() != "M9207"
+
+
 def grab_oppo(client) -> bool:
     """Power-cycle the OPPO so its own One-Touch-Play grabs the TV. Single-shot, non-fatal on failure.
 

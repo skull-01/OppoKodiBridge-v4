@@ -31,10 +31,18 @@ def run(config, kodi_file: str, should_abort=None) -> bool:
 
     client = OppoClient(config)
 
-    # play-side: the OPPO grabs the TV via its OWN One-Touch-Play (a single power-cycle).
+    # play-side: the OPPO grabs the TV via its OWN One-Touch-Play (a single power-cycle). Model-gated:
+    # the M9207 Plus / UDP-203 clone has no network grab (its #PON is a no-op and the #POF sleep wedges
+    # the unit), so the grab is skipped ENTIRELY there regardless of grab_tv_on_play -- the TV is
+    # switched to the OPPO input manually. See cec.grab_supported.
     if getattr(config, "grab_tv_on_play", True):
-        log("Grabbing the TV for the OPPO (power-cycle -> its own One-Touch-Play)")
-        cec.grab_oppo(client)
+        if cec.grab_supported(config):
+            log("Grabbing the TV for the OPPO (power-cycle -> its own One-Touch-Play)")
+            cec.grab_oppo(client)
+        else:
+            log("grab_tv_on_play is on but oppo_model={!r} has no network grab "
+                "(M9207/UDP-203); leaving the TV to be switched to the OPPO manually."
+                .format(getattr(config, "oppo_model", "")))
 
     started = False
     try:

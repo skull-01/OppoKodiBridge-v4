@@ -20,6 +20,16 @@ def test_grab_oppo_power_cycles():
     assert client.cycled == 1
 
 
+def test_grab_supported_is_model_gated():
+    # M9205 (and anything that is not M9207) can grab the TV via the network power-cycle.
+    assert cec.grab_supported(Config(oppo_model="M9205")) is True
+    assert cec.grab_supported(Config(oppo_model="m9205")) is True  # case-insensitive
+    assert cec.grab_supported(Config()) is True                    # default model = M9205
+    # M9207 Plus / UDP-203: no network grab (its #PON is a no-op + the #POF sleep wedges the unit).
+    assert cec.grab_supported(Config(oppo_model="M9207")) is False
+    assert cec.grab_supported(Config(oppo_model=" m9207 ")) is False
+
+
 def test_grab_oppo_nonfatal_on_error():
     class Boom:
         def power_cycle(self):

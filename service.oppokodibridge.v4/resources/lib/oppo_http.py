@@ -519,8 +519,9 @@ class OppoClient:
 
         NOTE: the M9207 Plus / UDP-203 clone does NOT support a network-triggered grab -- its #POF is a
         sleep and #PON is a no-op (the unit only does a full power-on, and thus One-Touch-Play, from an
-        IR/remote power button). On that hardware the grab is manual/IR; disable it via grab_tv_on_play.
-        The OPPO model (oppo_model) only selects the stop-monitor transport, not this grab."""
+        IR/remote power button). On that hardware the grab is manual/IR. As of v4.1.2 the orchestrator
+        skips this power-cycle entirely on the M9207 (see cec.grab_supported), so oppo_model now gates
+        BOTH the stop-monitor transport AND whether the network grab is attempted."""
         try:
             self.send_control_command("#POF")
         except OppoError as exc:

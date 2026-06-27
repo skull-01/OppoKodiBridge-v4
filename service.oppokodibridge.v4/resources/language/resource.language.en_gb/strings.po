@@ -28,15 +28,15 @@ msgid "Only hand discs & ISO files to the OPPO (else: everything)"
 msgstr ""
 
 msgctxt "#30005"
-msgid "OPPO model (stop-monitor transport)"
+msgid "OPPO model (stop-monitor transport + TV grab)"
 msgstr ""
 
 msgctxt "#30006"
-msgid "M9205 - verbose #SVM 3 push stop-watch (with HTTP fallback)"
+msgid "M9205 - verbose #SVM 3 stop-watch + CEC TV grab (power-cycle)"
 msgstr ""
 
 msgctxt "#30007"
-msgid "M9207 Plus / UDP-203 - HTTP-only stop-watch (no #SVM 3 on :23)"
+msgid "M9207 Plus / UDP-203 - HTTP-only stop-watch, no grab (switch TV manually)"
 msgstr ""
 
 msgctxt "#30010"
@@ -116,7 +116,7 @@ msgid "TV switching"
 msgstr ""
 
 msgctxt "#30061"
-msgid "Switch the TV by power-cycling the OPPO (its own One-Touch-Play)"
+msgid "Switch the TV by power-cycling the OPPO - M9205 only (ignored on M9207)"
 msgstr ""
 
 msgctxt "#30040"
