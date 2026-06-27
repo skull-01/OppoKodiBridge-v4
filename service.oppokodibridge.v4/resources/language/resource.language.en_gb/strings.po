@@ -72,19 +72,11 @@ msgid "OPPO HDMI physical address (e.g. 1.0.0.0 = HDMI 1)"
 msgstr ""
 
 msgctxt "#30030"
-msgid "Advanced"
+msgid "Kodi JSON-RPC"
 msgstr ""
 
 msgctxt "#30031"
 msgid "Use JSON play payload (M9205)"
-msgstr ""
-
-msgctxt "#30032"
-msgid "OPPO poll interval (seconds)"
-msgstr ""
-
-msgctxt "#30033"
-msgid "Network timeout (seconds)"
 msgstr ""
 
 msgctxt "#30034"

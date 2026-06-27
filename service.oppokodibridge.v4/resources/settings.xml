@@ -123,28 +123,6 @@
     </category>
     <category id="advanced" label="30030">
       <group id="1">
-        <setting id="poll_interval" type="integer" label="30032">
-          <level>0</level>
-          <default>5</default>
-          <constraints>
-            <minimum>2</minimum>
-            <maximum>60</maximum>
-          </constraints>
-          <control type="edit" format="integer">
-            <heading>30032</heading>
-          </control>
-        </setting>
-        <setting id="socket_timeout" type="integer" label="30033">
-          <level>0</level>
-          <default>4</default>
-          <constraints>
-            <minimum>1</minimum>
-            <maximum>30</maximum>
-          </constraints>
-          <control type="edit" format="integer">
-            <heading>30033</heading>
-          </control>
-        </setting>
         <setting id="kodi_rpc_port" type="integer" label="30065">
           <level>0</level>
           <default>8080</default>

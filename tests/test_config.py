@@ -91,6 +91,19 @@ def test_from_addon_defaults_ip_from_model(monkeypatch):
     assert config_mod.from_addon().oppo_ip == "192.168.1.50"
 
 
+def test_from_addon_ignores_removed_tuning_settings(monkeypatch):
+    # poll_interval & socket_timeout are no longer user settings (the Advanced tab now holds only the
+    # Kodi JSON-RPC settings) -> from_addon must NOT read them; they take the dataclass defaults.
+    monkeypatch.setitem(
+        sys.modules, "xbmcaddon",
+        _fake_xbmcaddon({"oppo_ip": "1.2.3.4", "poll_interval": 99, "socket_timeout": 25, "kodi_rpc_port": 9090}),
+    )
+    cfg = config_mod.from_addon()
+    assert cfg.poll_interval == 5.0       # dataclass default, NOT the stray 99
+    assert cfg.socket_timeout == 4.0      # dataclass default, NOT the stray 25
+    assert cfg.kodi_rpc_port == 9090      # Kodi JSON-RPC settings are still read
+
+
 def test_from_addon_passes_explicit_addon_id(monkeypatch):
     # a no-arg xbmcaddon.Addon() raises "No valid addon id" when launched via RunScript (the Setup &
     # tests buttons) -- from_addon must pass the explicit id so those scripts don't crash.
