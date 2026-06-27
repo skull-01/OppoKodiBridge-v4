@@ -75,6 +75,11 @@
     </category>
     <category id="paths" label="30010">
       <group id="1">
+        <setting id="path_from_autodetect" type="boolean" label="30013">
+          <level>0</level>
+          <default>true</default>
+          <control type="toggle"/>
+        </setting>
         <setting id="path_from" type="string" label="30011">
           <level>0</level>
           <default>nfs://192.168.1.177/mnt/Super3/Super3Share</default>

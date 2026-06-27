@@ -105,6 +105,45 @@ def split_share_relative(media_file: str, path_from: str) -> Tuple[Optional[str]
     return (folder, basename)
 
 
+def unwrap_multipath(source: str) -> list:
+    """Expand a Kodi ``multipath://`` source into its member paths (URL-decoded); a non-multipath
+    source returns ``[source]``. Kodi encodes a multipath as ``multipath://`` followed by each member
+    path percent-encoded and joined with ``/`` (so a member's own slashes survive as ``%2f``)."""
+    text = str(source or "").strip()
+    if not text:
+        return []
+    if not text.lower().startswith("multipath://"):
+        return [text]
+    body = text[len("multipath://"):]
+    return [urllib.parse.unquote(part) for part in body.split("/") if part]
+
+
+def _decode_share(text: str) -> str:
+    """URL-decode an ``nfs://``/``smb://`` path so it compares literally (matches split_share_relative)."""
+    text = str(text or "")
+    if text.lower().startswith(("nfs://", "smb://")):
+        return urllib.parse.unquote(text)
+    return text
+
+
+def detect_path_from(media_file: str, sources) -> Optional[str]:
+    """The Kodi source root the played ``media_file`` lives under -- i.e. ``path_from`` derived from
+    Kodi's OWN configured sources instead of the typed setting. Longest-prefix wins, with the same
+    path-boundary rule as ``split_share_relative`` (so a sibling share whose name merely EXTENDS another
+    -- ``Super3Share-4K`` vs ``Super3Share`` -- never mis-matches). Returns the matching root (trailing
+    slash stripped) or ``None`` when no source contains the file. Pure: feed it ``kodi_video_sources``."""
+    text = _decode_share(media_file)
+    best: Optional[str] = None
+    for source in sources or []:
+        prefix = _decode_share(source).strip().rstrip("/")
+        if not prefix:
+            continue
+        if text == prefix or text.startswith(prefix + "/"):
+            if best is None or len(prefix) > len(best):
+                best = prefix
+    return best
+
+
 def oppo_mount_folder(folder: Optional[str], path_to: str) -> str:
     """The OPPO export folder to mount = the OPPO export root (``path_to``) + the in-share folder."""
     base = (path_to or "").strip().strip("/")

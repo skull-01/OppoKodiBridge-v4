@@ -112,3 +112,18 @@ def test_from_addon_passes_explicit_addon_id(monkeypatch):
     cfg = config_mod.from_addon()
     assert captured["id"] == "service.oppokodibridge.v4"
     assert cfg.oppo_ip == "1.2.3.4"
+
+
+def test_from_addon_path_from_autodetect_defaults_true(monkeypatch):
+    # undeclared/unset -> dataclass default True (auto-detect path_from from Kodi sources is on)
+    monkeypatch.setitem(sys.modules, "xbmcaddon", _fake_xbmcaddon({"oppo_ip": "1.2.3.4"}))
+    assert config_mod.from_addon().path_from_autodetect is True
+
+
+def test_from_addon_path_from_autodetect_honours_false(monkeypatch):
+    # explicitly disabled -> False (use the typed path_from only; no per-play Kodi JSON-RPC)
+    monkeypatch.setitem(
+        sys.modules, "xbmcaddon",
+        _fake_xbmcaddon({"oppo_ip": "1.2.3.4", "path_from_autodetect": False}),
+    )
+    assert config_mod.from_addon().path_from_autodetect is False

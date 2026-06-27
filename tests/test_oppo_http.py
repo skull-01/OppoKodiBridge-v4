@@ -56,6 +56,56 @@ def test_oppo_mount_folder():
     assert oh.oppo_mount_folder("A/B", "/srv/nfs/media/") == "srv/nfs/media/A/B"
 
 
+def test_unwrap_multipath_passthrough_for_plain_source():
+    assert oh.unwrap_multipath("nfs://192.168.1.177/share/") == ["nfs://192.168.1.177/share/"]
+    assert oh.unwrap_multipath("  smb://host/movies  ") == ["smb://host/movies"]
+    assert oh.unwrap_multipath("") == []
+    assert oh.unwrap_multipath(None) == []
+
+
+def test_unwrap_multipath_expands_members_urldecoded():
+    # Kodi encodes each member fully (its own scheme/slashes percent-encoded) and joins with '/'.
+    a = urllib.parse.quote("nfs://192.168.1.177/share/A/", safe="")
+    b = urllib.parse.quote("nfs://192.168.1.177/share/B/", safe="")
+    src = "multipath://" + a + "/" + b + "/"
+    assert oh.unwrap_multipath(src) == [
+        "nfs://192.168.1.177/share/A/",
+        "nfs://192.168.1.177/share/B/",
+    ]
+
+
+def test_detect_path_from_longest_prefix_wins():
+    sources = ["nfs://192.168.1.177/share", "nfs://192.168.1.177/share/Movies"]
+    got = oh.detect_path_from("nfs://192.168.1.177/share/Movies/Dune (2021).iso", sources)
+    assert got == "nfs://192.168.1.177/share/Movies"  # the more specific source, not the parent
+
+
+def test_detect_path_from_strips_trailing_slash_and_feeds_split():
+    src = "nfs://192.168.1.177/share/"
+    detected = oh.detect_path_from("nfs://192.168.1.177/share/Movies/clip.mp4", [src])
+    assert detected == "nfs://192.168.1.177/share"  # trailing slash normalised
+    # round-trip: the detected value maps the same file through split_share_relative
+    assert oh.split_share_relative("nfs://192.168.1.177/share/Movies/clip.mp4", detected) == (
+        "Movies", "clip.mp4")
+
+
+def test_detect_path_from_sibling_share_boundary():
+    # a source whose name merely EXTENDS the share root must not match (same rule as split)
+    assert oh.detect_path_from("nfs://h/Super3Share-4K/x.iso", ["nfs://h/Super3Share"]) is None
+
+
+def test_detect_path_from_no_match_returns_none():
+    assert oh.detect_path_from("nfs://h/share/x.mkv", ["nfs://other/root", "smb://nas/media"]) is None
+    assert oh.detect_path_from("nfs://h/share/x.mkv", []) is None
+    assert oh.detect_path_from("nfs://h/share/x.mkv", None) is None
+
+
+def test_detect_path_from_matches_urlencoded_media_against_decoded_source():
+    # the played path arrives percent-encoded; the source root is literal -- both are decoded to match.
+    media = "nfs://192.168.1.177/share/A%20B/file%20(2024).mkv"
+    assert oh.detect_path_from(media, ["nfs://192.168.1.177/share/A B"]) == "nfs://192.168.1.177/share/A B"
+
+
 def test_nfs_server_from_devices():
     devices = {
         "devicelist": [

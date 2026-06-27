@@ -9,6 +9,10 @@ Each is fired exactly ONCE per play/stop event by the orchestrator. There is NO 
 re-asserts active source -- that would override a manual input change and make the TV un-leaveable
 (CEC is open-loop; we cannot tell "the TV missed my frame" from "the user switched away"). Each device
 asserts only its OWN source -- no injection, no foreign-initiator spoof.
+
+This module also hosts the add-on's localhost Kodi JSON-RPC channel (``_kodi_jsonrpc``): the CEC
+reclaim above, and ``kodi_video_sources`` -- read Kodi's configured video sources so the handoff can
+auto-detect ``path_from`` (it is the same 127.0.0.1 web-server channel the reclaim already needs).
 """
 from __future__ import annotations
 
@@ -17,7 +21,11 @@ import json
 import urllib.request
 
 from .kodilog import log
-from .oppo_http import OppoClient, OppoError  # noqa: F401 (OppoClient re-exported for callers/tests)
+from .oppo_http import (  # noqa: F401 (OppoClient re-exported for callers/tests)
+    OppoClient,
+    OppoError,
+    unwrap_multipath,
+)
 
 RECLAIM_ADDON = "script.cecreclaim"
 
@@ -50,18 +58,17 @@ def grab_oppo(client) -> bool:
         return False
 
 
-def reclaim_kodi(config) -> bool:
-    """Ask Kodi to re-assert its OWN active source once, via localhost JSON-RPC -> script.cecreclaim.
-
-    Runs from the external player process (or the in-Kodi settings test); both reach Kodi's HTTP
-    JSON-RPC on 127.0.0.1. Returns True if the call was accepted (the TV switch itself is open-loop)."""
+def _kodi_jsonrpc(config, method: str, params=None, timeout: float = 5.0):
+    """POST one JSON-RPC call to Kodi's localhost web server and return the parsed response dict, or
+    ``None`` on ANY transport/parse failure (unreachable, timeout, HTTPError e.g. 401, or a non-JSON
+    200 body from a misconfigured web server). NEVER raises -- callers run in the orchestrator's
+    ``finally`` (reclaim) or before a handoff (sources), where an escape would strand the TV/handoff."""
     host = "127.0.0.1"
     port = int(getattr(config, "kodi_rpc_port", 8080) or 8080)
     user = getattr(config, "kodi_rpc_user", "") or ""
     password = getattr(config, "kodi_rpc_pass", "") or ""
     payload = json.dumps(
-        {"jsonrpc": "2.0", "id": 1, "method": "Addons.ExecuteAddon",
-         "params": {"addonid": RECLAIM_ADDON}}
+        {"jsonrpc": "2.0", "id": 1, "method": method, "params": params or {}}
     ).encode()
     req = urllib.request.Request(
         "http://{}:{}/jsonrpc".format(host, port),
@@ -72,16 +79,43 @@ def reclaim_kodi(config) -> bool:
         token = base64.b64encode("{}:{}".format(user, password).encode()).decode()
         req.add_header("Authorization", "Basic " + token)
     try:
-        with urllib.request.urlopen(req, timeout=5.0) as resp:
-            body = json.loads(resp.read().decode("utf-8", "replace"))
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode("utf-8", "replace"))
     except (OSError, ValueError) as exc:
-        # OSError = unreachable / timeout / HTTPError (e.g. 401); ValueError (json.JSONDecodeError) = a
-        # non-JSON 200 body, e.g. a misconfigured Kodi web server returning an HTML login/error page.
-        # Either way: log and give up -- never raise into the orchestrator's finally or the settings test.
-        log("Kodi reclaim failed (JSON-RPC {}:{}): {}".format(host, port, exc))
+        log("Kodi JSON-RPC {} failed ({}:{}): {}".format(method, host, port, exc))
+        return None
+
+
+def reclaim_kodi(config) -> bool:
+    """Ask Kodi to re-assert its OWN active source once, via localhost JSON-RPC -> script.cecreclaim.
+
+    Runs from the external player process (or the in-Kodi settings test); both reach Kodi's HTTP
+    JSON-RPC on 127.0.0.1. Returns True if the call was accepted (the TV switch itself is open-loop)."""
+    body = _kodi_jsonrpc(config, "Addons.ExecuteAddon", {"addonid": RECLAIM_ADDON})
+    if body is None:
         return False
     if isinstance(body, dict) and body.get("error"):
         log("Kodi reclaim error: {}".format(body["error"]))
         return False
     log("Kodi reclaim sent (script.cecreclaim -> CECActivateSource), single-shot.")
     return True
+
+
+def kodi_video_sources(config) -> list:
+    """Kodi's configured VIDEO source roots, for auto-detecting ``path_from`` (over the same localhost
+    JSON-RPC channel as the reclaim). Best-effort: returns ``[]`` on any failure or unexpected shape --
+    the handoff then falls back to the typed ``path_from``. ``multipath://`` sources (one source that
+    aggregates several folders) are expanded into their member roots."""
+    body = _kodi_jsonrpc(config, "Files.GetSources", {"media": "video"})
+    result = body.get("result") if isinstance(body, dict) else None
+    sources = result.get("sources") if isinstance(result, dict) else None
+    if not isinstance(sources, list):
+        return []
+    roots: list = []
+    for item in sources:
+        if not isinstance(item, dict):
+            continue
+        path = item.get("file")
+        if path:
+            roots.extend(unwrap_multipath(str(path)))
+    return roots

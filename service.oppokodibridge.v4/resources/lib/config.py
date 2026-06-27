@@ -23,6 +23,7 @@ class Config:
     app_device_type: int = 2
     path_from: str = ""
     path_to: str = ""
+    path_from_autodetect: bool = True
     cec_auto_enable: bool = True
     cec_reclaim_on_stop: bool = True
     grab_tv_on_play: bool = True
@@ -115,6 +116,7 @@ def from_addon() -> "Config":
         app_device_type=i("app_device_type", 2),
         path_from=s("path_from").strip(),
         path_to=s("path_to").strip(),
+        path_from_autodetect=b("path_from_autodetect", True),
         cec_auto_enable=b("cec_auto_enable", True),
         cec_reclaim_on_stop=b("cec_reclaim_on_stop", True),
         grab_tv_on_play=b("grab_tv_on_play", True),

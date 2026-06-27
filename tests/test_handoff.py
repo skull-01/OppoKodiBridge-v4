@@ -47,7 +47,9 @@ class _FakeClient:
 
 
 def _cfg():
-    return Config(oppo_ip="x", path_from="nfs://h/s", path_to="srv")
+    # autodetect off: these tests exercise the mapping/routing with the typed path_from. The
+    # detect-from-Kodi-sources seam (a localhost JSON-RPC) is covered by the dedicated tests below.
+    return Config(oppo_ip="x", path_from="nfs://h/s", path_to="srv", path_from_autodetect=False)
 
 
 def test_play_returns_false_when_play_call_failed(monkeypatch):
@@ -170,7 +172,8 @@ def test_play_loose_bdmv_mounts_containing_dir_not_the_file(monkeypatch):
 
 
 def _cfg_model(model):
-    return Config(oppo_ip="x", path_from="nfs://h/s", path_to="srv/nfs/media", oppo_model=model)
+    return Config(oppo_ip="x", path_from="nfs://h/s", path_to="srv/nfs/media", oppo_model=model,
+                  path_from_autodetect=False)
 
 
 def test_play_m9205_mounts_file_folder_and_plays_bare_name(monkeypatch):
@@ -212,3 +215,70 @@ def test_oppo_model_does_not_affect_play_path(monkeypatch):
     handoff.play(_cfg_model("M9205"), a, "nfs://h/s/Movies/Dune/BDMV/index.bdmv")
     handoff.play(_cfg_model("M9207"), b, "nfs://h/s/Movies/Dune/BDMV/index.bdmv")
     assert a.calls == b.calls and a.calls  # identical, and non-empty (actually exercised the path)
+
+
+# --- path_from auto-detection from Kodi sources (#9) -----------------------------------------------
+# handoff.play prefers the Kodi-served source root (cec.kodi_video_sources, longest-prefix) over the
+# typed path_from when path_from_autodetect is on; it falls back to the typed value otherwise.
+
+def _cfg_auto(path_from="", path_to="srv"):
+    return Config(oppo_ip="x", path_from=path_from, path_to=path_to, path_from_autodetect=True)
+
+
+def test_play_autodetects_path_from_when_typed_is_blank(monkeypatch):
+    # No typed path_from at all; detection from Kodi's sources supplies it so the file still maps.
+    monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
+    monkeypatch.setattr(handoff.cec, "kodi_video_sources", lambda cfg: ["nfs://192.168.1.177/share/"])
+    client = _RecordingClient()
+    assert handoff.play(_cfg_auto(), client, "nfs://192.168.1.177/share/Movies/Dune (2021).iso") is True
+    assert ("mount", "srv/Movies") in client.calls
+    assert ("play_file", "Dune (2021).iso") in client.calls
+
+
+def test_play_autodetect_overrides_a_wrong_typed_path_from(monkeypatch):
+    # A stale/wrong typed path_from would NOT map; detection picks the real Kodi source root instead.
+    monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
+    monkeypatch.setattr(handoff.cec, "kodi_video_sources", lambda cfg: ["nfs://192.168.1.177/share"])
+    client = _RecordingClient()
+    cfg = _cfg_auto(path_from="nfs://wrong/root")
+    assert handoff.play(cfg, client, "nfs://192.168.1.177/share/Movies/clip.mp4") is True
+    assert ("mount", "srv/Movies") in client.calls
+    assert ("play_file", "clip.mp4") in client.calls
+
+
+def test_play_autodetect_falls_back_to_typed_when_no_source_matches(monkeypatch):
+    # Detection finds no source containing the file -> fall back to the typed path_from (which matches).
+    monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
+    monkeypatch.setattr(handoff.cec, "kodi_video_sources", lambda cfg: ["nfs://other/root"])
+    client = _RecordingClient()
+    cfg = _cfg_auto(path_from="nfs://h/s")
+    assert handoff.play(cfg, client, "nfs://h/s/Movies/clip.mp4") is True
+    assert ("mount", "srv/Movies") in client.calls
+    assert ("play_file", "clip.mp4") in client.calls
+
+
+def test_play_autodetect_falls_back_when_kodi_unreachable(monkeypatch):
+    # kodi_video_sources returns [] (JSON-RPC unreachable / odd shape) -> the typed path_from is used.
+    monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
+    monkeypatch.setattr(handoff.cec, "kodi_video_sources", lambda cfg: [])
+    client = _RecordingClient()
+    cfg = _cfg_auto(path_from="nfs://h/s")
+    assert handoff.play(cfg, client, "nfs://h/s/Movies/clip.mp4") is True
+    assert ("mount", "srv/Movies") in client.calls
+
+
+def test_play_autodetect_off_never_queries_kodi(monkeypatch):
+    # With autodetect off there is NO per-play Kodi JSON-RPC -- the sources query is never issued.
+    monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
+    called = {"n": 0}
+
+    def _record(cfg):
+        called["n"] += 1
+        return ["nfs://should/not/be/used"]
+
+    monkeypatch.setattr(handoff.cec, "kodi_video_sources", _record)
+    client = _RecordingClient()
+    cfg = Config(oppo_ip="x", path_from="nfs://h/s", path_to="srv", path_from_autodetect=False)
+    assert handoff.play(cfg, client, "nfs://h/s/Movies/clip.mp4") is True
+    assert called["n"] == 0
+    assert ("mount", "srv/Movies") in client.calls

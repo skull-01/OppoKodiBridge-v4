@@ -8,11 +8,12 @@ folder). Mount the file's folder and play the bare name; never mount a non-expor
 """
 from __future__ import annotations
 
-from . import detector
+from . import cec, detector
 from .kodilog import log
 from .monitor import interruptible_sleep
 from .oppo_http import (
     OppoError,
+    detect_path_from,
     local_ip_toward,
     nfs_server_from_devices,
     oppo_mount_folder,
@@ -37,9 +38,20 @@ def play(config, client, kodi_file: str, should_abort=None) -> bool:
     if should_abort is None:
         should_abort = lambda: False
 
-    folder, basename = split_share_relative(kodi_file.rstrip("/"), config.path_from)
+    # path_from is the Kodi-side share root we strip to get the in-share path. Prefer what Kodi is
+    # ACTUALLY serving (its configured sources, longest-prefix match) over the typed setting, so the
+    # mapping adapts to the live share; fall back to the typed path_from when detection is off, the
+    # Kodi JSON-RPC is unreachable, or no source contains the file. Kodi-side only -- no OPPO contact.
+    path_from = config.path_from
+    if getattr(config, "path_from_autodetect", True):
+        detected = detect_path_from(kodi_file, cec.kodi_video_sources(config))
+        if detected:
+            path_from = detected
+            log("path_from auto-detected from Kodi sources: {!r}".format(detected))
+
+    folder, basename = split_share_relative(kodi_file.rstrip("/"), path_from)
     if not basename:
-        log("Cannot map {!r} with path_from={!r}".format(kodi_file, config.path_from))
+        log("Cannot map {!r} with path_from={!r}".format(kodi_file, path_from))
         return False
 
     # The in-share path to what the OPPO should open: the disc FOLDER (BDMV / VIDEO_TS) for a disc,
