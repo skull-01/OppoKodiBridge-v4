@@ -243,6 +243,25 @@ def test_play_typed_path_from_wins_and_skips_kodi_when_it_maps(monkeypatch):
     assert ("mount", "srv/Movies") in client.calls    # mapped via the typed path_from, not detection
 
 
+def test_play_typed_depth_wins_even_when_a_deeper_source_also_maps(monkeypatch):
+    # The exact H2 mis-mount scenario, made explicit: the typed path_from maps AND a deeper Kodi source
+    # (the per-library-subfolder layout) would ALSO map the same file. detect-FIRST would have picked
+    # the deeper root -> empty in-share folder -> mount the path_to ROOT 'srv' (wrong, file not there).
+    # detect-as-fallback keeps the typed depth: mount stays 'srv/Movies', and Kodi is never queried.
+    monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
+    called = {"n": 0}
+
+    def _deeper(cfg):
+        called["n"] += 1
+        return ["nfs://h/s/Movies"]  # a deeper source that genuinely maps the played file
+
+    monkeypatch.setattr(handoff.cec, "kodi_video_sources", _deeper)
+    client = _RecordingClient()
+    assert handoff.play(_cfg_auto(path_from="nfs://h/s"), client, "nfs://h/s/Movies/clip.mp4") is True
+    assert called["n"] == 0                            # typed mapped -> the deeper source is never consulted
+    assert ("mount", "srv/Movies") in client.calls     # typed depth preserved, NOT 'srv' (path_to root)
+
+
 def test_play_autodetects_when_typed_path_from_is_blank(monkeypatch):
     # No typed path_from -> it can't map -> detection from Kodi's sources supplies it.
     monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
