@@ -51,6 +51,29 @@ class Config:
         return cls(**{k: v for k, v in (data or {}).items() if k in names})
 
 
+# Per-model default OPPO IP. The model is the first setting; the IP field defaults from it
+# (M9205 = .10, M9207 = .228) -- but a custom address the user typed is always preserved.
+DEFAULT_IP_BY_MODEL = {
+    "M9205": "192.168.10.10",
+    "M9207": "192.168.10.228",
+}
+
+
+def default_ip_for_model(model: str) -> str:
+    """The default OPPO IP for ``model`` (falls back to the M9205 default for an unknown model)."""
+    return DEFAULT_IP_BY_MODEL.get(str(model or "").strip().upper(), DEFAULT_IP_BY_MODEL["M9205"])
+
+
+def resolve_oppo_ip(model: str, raw_ip: str) -> str:
+    """The effective OPPO IP for ``model``: keep a custom address the user typed, but fill a blank or a
+    known per-model default with THIS model's default. So selecting the model drives the default IP
+    (M9205 -> .10, M9207 -> .228) without ever clobbering a hand-entered address."""
+    ip = str(raw_ip or "").strip()
+    if ip and ip not in DEFAULT_IP_BY_MODEL.values():
+        return ip  # a custom address -> keep it
+    return default_ip_for_model(model)
+
+
 def from_addon() -> "Config":
     import xbmcaddon
 
@@ -80,10 +103,11 @@ def from_addon() -> "Config":
         except Exception:
             return default
 
+    oppo_model = s("oppo_model", "M9205").strip().upper()
     return Config(
-        oppo_ip=s("oppo_ip").strip(),
+        oppo_ip=resolve_oppo_ip(oppo_model, s("oppo_ip")),
         oppo_http_port=i("oppo_http_port", 436),
-        oppo_model=s("oppo_model", "M9205").strip().upper(),
+        oppo_model=oppo_model,
         socket_timeout=float(i("socket_timeout", 4)),
         handoff_enabled=b("handoff_enabled", True),
         disc_iso_only=b("disc_iso_only", True),

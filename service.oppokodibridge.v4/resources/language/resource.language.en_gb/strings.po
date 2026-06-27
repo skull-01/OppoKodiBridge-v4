@@ -8,11 +8,11 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 
 msgctxt "#30000"
-msgid "OPPO / M9205"
+msgid "OPPO"
 msgstr ""
 
 msgctxt "#30001"
-msgid "OPPO IP address"
+msgid "OPPO IP address (defaults from the model)"
 msgstr ""
 
 msgctxt "#30002"

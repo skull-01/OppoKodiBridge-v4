@@ -72,6 +72,33 @@ def _install_pcf() -> None:
         log("install playercorefactory.xml failed: {!r}".format(exc))
 
 
+def _current_model() -> str:
+    import xbmcaddon
+
+    try:
+        return (xbmcaddon.Addon(ADDON_ID).getSettingString("oppo_model") or "M9205").strip().upper()
+    except Exception:  # pragma: no cover - hardware path
+        return "M9205"
+
+
+def _autofill_ip_on_model_change(prev_model: str) -> str:
+    """When oppo_model changes, default the oppo_ip field from the model (M9205 -> .10, M9207 -> .228)
+    unless the user typed a custom address. Returns the current model so the caller can track changes.
+    The IP-resolution rule lives in config.resolve_oppo_ip, so a custom address is never clobbered."""
+    import xbmcaddon
+
+    addon = xbmcaddon.Addon(ADDON_ID)
+    model = (addon.getSettingString("oppo_model") or "M9205").strip().upper()
+    if model == prev_model:  # not a model change -> leave the IP alone (e.g. the user edited it)
+        return model
+    current_ip = (addon.getSettingString("oppo_ip") or "").strip()
+    new_ip = config_mod.resolve_oppo_ip(model, current_ip)
+    if new_ip and new_ip != current_ip:
+        addon.setSettingString("oppo_ip", new_ip)  # re-fires onSettingsChanged, but model==prev then -> no loop
+        log("oppo_model -> {}: defaulted oppo_ip to {}".format(model, new_ip))
+    return model
+
+
 def main() -> None:
     import xbmc
 
@@ -80,7 +107,12 @@ def main() -> None:
     _install_pcf()
 
     class _Monitor(xbmc.Monitor):
+        def __init__(self) -> None:
+            super().__init__()
+            self._model = _current_model()
+
         def onSettingsChanged(self) -> None:
+            self._model = _autofill_ip_on_model_change(self._model)
             log("settings changed; re-publishing config + playercorefactory.xml")
             _publish_config()
             _install_pcf()

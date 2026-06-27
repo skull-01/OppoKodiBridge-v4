@@ -59,6 +59,38 @@ def test_from_addon_honours_declared_falsy_values(monkeypatch):
     assert cfg.handoff_enabled is False
 
 
+def test_default_ip_for_model():
+    assert config_mod.default_ip_for_model("M9205") == "192.168.10.10"
+    assert config_mod.default_ip_for_model("M9207") == "192.168.10.228"
+    assert config_mod.default_ip_for_model("m9207") == "192.168.10.228"   # case-insensitive
+    assert config_mod.default_ip_for_model("") == "192.168.10.10"          # unknown -> M9205 default
+    assert config_mod.default_ip_for_model(None) == "192.168.10.10"
+
+
+def test_resolve_oppo_ip_defaults_from_model_but_keeps_custom():
+    # blank -> this model's default
+    assert config_mod.resolve_oppo_ip("M9207", "") == "192.168.10.228"
+    assert config_mod.resolve_oppo_ip("M9205", "") == "192.168.10.10"
+    # a known per-model default (the OTHER model's) is treated as non-custom -> swapped to this model's
+    assert config_mod.resolve_oppo_ip("M9207", "192.168.10.10") == "192.168.10.228"
+    assert config_mod.resolve_oppo_ip("M9205", "192.168.10.228") == "192.168.10.10"
+    # this model's own default stays
+    assert config_mod.resolve_oppo_ip("M9207", "192.168.10.228") == "192.168.10.228"
+    # a custom address is NEVER clobbered
+    assert config_mod.resolve_oppo_ip("M9207", "192.168.1.50") == "192.168.1.50"
+    assert config_mod.resolve_oppo_ip("M9205", "10.0.0.9") == "10.0.0.9"
+
+
+def test_from_addon_defaults_ip_from_model(monkeypatch):
+    # M9207 with no IP set -> the M9207 default; M9205 -> the M9205 default; a custom IP is preserved.
+    monkeypatch.setitem(sys.modules, "xbmcaddon", _fake_xbmcaddon({"oppo_model": "M9207"}))
+    assert config_mod.from_addon().oppo_ip == "192.168.10.228"
+    monkeypatch.setitem(sys.modules, "xbmcaddon", _fake_xbmcaddon({"oppo_model": "M9205"}))
+    assert config_mod.from_addon().oppo_ip == "192.168.10.10"
+    monkeypatch.setitem(sys.modules, "xbmcaddon", _fake_xbmcaddon({"oppo_model": "M9207", "oppo_ip": "192.168.1.50"}))
+    assert config_mod.from_addon().oppo_ip == "192.168.1.50"
+
+
 def test_from_addon_passes_explicit_addon_id(monkeypatch):
     # a no-arg xbmcaddon.Addon() raises "No valid addon id" when launched via RunScript (the Setup &
     # tests buttons) -- from_addon must pass the explicit id so those scripts don't crash.
