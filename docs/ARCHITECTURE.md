@@ -46,10 +46,14 @@ sequenceDiagram
     X->>X: read runtime_config.json; detector confirms it is a disc
 
     rect rgb(255,244,232)
-    Note over X,T: Grab — single-shot, play-side (only if grab_tv_on_play)
-    X->>O: power-cycle  (#POF → #PON)
-    Note over O: the OPPO asserts active source only on a power-ON transition
-    O->>T: its OWN One-Touch-Play → TV switches to HDMI-1 (the OPPO)
+    Note over X,T: Grab — single-shot, play-side, model-gated (if grab_tv_on_play)
+    alt oppo_model = M9205 (grab-capable)
+        X->>O: power-cycle  (#POF → #PON)
+        Note over O: the OPPO asserts active source only on a power-ON transition
+        O->>T: its OWN One-Touch-Play → TV switches to HDMI-1 (the OPPO)
+    else oppo_model = M9207 / UDP-203 (no network grab)
+        Note over X,T: grab skipped — switch the TV to the OPPO input manually
+    end
     end
 
     X->>O: HTTP: wake (:7624) → init → login NFS → mount → play (:436)
@@ -111,16 +115,19 @@ sequenceDiagram
 5. `pcf_player.py` reads `runtime_config.json` (locating it from its own path) → builds a `Config` →
    calls `orchestrator.run(config, file)`.
 6. `orchestrator.run` re-checks `detector.is_handoff_target` and that an OPPO is configured, then:
-   - **Grabs the TV for the OPPO** (play-side, single-shot, gated by `grab_tv_on_play`): `cec.grab_oppo`
-     calls `oppo_http.power_cycle()` (`#POF` → `#PON`). The OPPO asserts active source only on a
-     power-**ON** transition, so an already-on OPPO is power-cycled to re-grab. This is non-fatal — a
-     failure is logged and the handoff continues.
+   - **Grabs the TV for the OPPO** (play-side, single-shot, gated by `grab_tv_on_play` **and**
+     `cec.grab_supported`): `cec.grab_oppo` calls `oppo_http.power_cycle()` (`#POF` → `#PON`). The OPPO
+     asserts active source only on a power-**ON** transition, so an already-on OPPO is power-cycled to
+     re-grab. This is non-fatal — a failure is logged and the handoff continues. **Model-gated:** on the
+     M9207 Plus / UDP-203 the grab is skipped entirely (its `#PON` is a no-op and the `#POF` sleep
+     wedges the unit), regardless of `grab_tv_on_play`; switch that unit's TV input manually.
    - **Plays on the OPPO over HTTP** (`handoff.play`): wake (`:7624`) → init dance
      (firmware/setup/signin/globalinfo) → resolve the OPPO's own NFS server (`/getdevicelist`) →
      `loginNfsServer` → `mountNfsSharedFolder` → `/playnormalfile` (files/ISO) or
      `/checkfolderhasBDMV` (discs). The mount/play layout is the same for every model: mount the file's
-     folder and play the bare leaf name (the OPPO won't play sub-paths of a mount). `oppo_model` no
-     longer affects this — it only selects the Phase-2 stop-monitor transport (below).
+     folder and play the bare leaf name (the OPPO won't play sub-paths of a mount). `oppo_model` does
+     not affect the mount/play layout — it gates the Phase-2 stop-monitor transport (below) **and**,
+     since v4.1.2, the play-side TV grab (the M9207 skips the grab — see `cec.grab_supported`).
 
 **Monitoring — two phases (`monitor.watch_playback`, asserts nothing)**
 7. **Phase 1 — pre-playback (HTTP):** poll `/getglobalinfo` until the OPPO *actually* starts playing

@@ -15,7 +15,7 @@ as the cost.
 
 | Leg | How |
 |-----|-----|
-| OPPO grabs its HDMI input | the OPPO's **own** One-Touch-Play, forced by power-cycling it (`#POF`->`#PON`). It only asserts active source on a power-**ON** transition, so an already-on OPPO is power-cycled to re-grab. |
+| OPPO grabs its HDMI input | the OPPO's **own** One-Touch-Play, forced by power-cycling it (`#POF`->`#PON`). It only asserts active source on a power-**ON** transition, so an already-on OPPO is power-cycled to re-grab. **M9205 only** (model-gated via `cec.grab_supported`): on the M9207 Plus / UDP-203 the network power-cycle is a no-op that wedges the unit, so the grab is skipped and the TV is switched to the OPPO input manually. |
 | Kodi reclaims its HDMI input | Kodi re-asserts its **own** active source (libCEC `SetActiveSource`). |
 
 **Never:** an IR blaster, a CEC `<Active Source>` / `<Set Stream Path>` injected with a *foreign* initiator,
@@ -24,8 +24,8 @@ Mi Box cross-control that motivated this fork).
 
 ### Assert once per event -- never re-assert
 
-Each TV-input assertion is **single-shot, tied to an event**: the OPPO grabs HDMI-1 once on play, Kodi
-reclaims once on stop. There is **no standing monitor** re-asserting active source -- that would override a
+Each TV-input assertion is **single-shot, tied to an event**: the OPPO grabs HDMI-1 once on play (on the
+grab-capable M9205; the M9207 grab is skipped and the TV is switched manually), Kodi reclaims once on stop. There is **no standing monitor** re-asserting active source -- that would override a
 manual input change and make the TV un-leaveable (CEC is open-loop; it can't tell "the TV missed my frame"
 from "the user switched away"). So if you manually switch the TV input, your choice **stays**. The orchestrator
 fires the grab once on play and the reclaim once on stop -- and nothing else ever touches the TV.
@@ -51,7 +51,7 @@ playercorefactory external-player process, so there is still no blip):
 |--------|----------------|
 | `detector` | which files qualify for handoff (ISO + BDMV/VIDEO_TS) -- one source of truth; `pcf` builds its routing rules from it |
 | `handoff` | tell the OPPO to play (wake → init → mount → play); pure OPPO HTTP |
-| `cec` | trigger the switch-over -- `grab_oppo` (power-cycle) + `reclaim_kodi` (JSON-RPC → `script.cecreclaim` → `CECActivateSource`) |
+| `cec` | trigger the switch-over -- `grab_oppo` (power-cycle, M9205 only via `grab_supported`) + `reclaim_kodi` (JSON-RPC → `script.cecreclaim` → `CECActivateSource`) |
 | `monitor` | watch playback state (HTTP poll → playing; stop via `#SVM 3` on M9205, HTTP-only on M9207) |
 | `orchestrator` | the flow: detect → grab → play → watch → reclaim |
 

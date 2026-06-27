@@ -204,7 +204,8 @@ def test_play_m9207_disc_uses_same_layout_as_m9205(monkeypatch):
 
 def test_oppo_model_does_not_affect_play_path(monkeypatch):
     # Invariant: oppo_model no longer changes the mount/play path -- M9205 and M9207 issue an identical
-    # call sequence. The model only selects the stop-monitor transport (see test_monitor.py).
+    # call sequence. The model selects the stop-monitor transport and the TV grab, NOT the play path
+    # (see test_monitor.py and test_cec.py).
     monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
     a, b = _RecordingClient(), _RecordingClient()
     handoff.play(_cfg_model("M9205"), a, "nfs://h/s/Movies/Dune/BDMV/index.bdmv")

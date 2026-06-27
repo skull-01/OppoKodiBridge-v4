@@ -259,7 +259,7 @@ failure into the OPPO power-cycle.
 
 | Condition | `ir.configured()` | Behaviour | Why |
 |-----------|:---:|-----------|-----|
-| No `broadlink_ip`/`ir_code_oppo` | False | interim OPPO power-cycle (if `grab_tv_on_play`), else rely on Kodi reasserting on exit | the only legitimate power-cycle path |
+| No `broadlink_ip`/`ir_code_oppo` | False | interim OPPO power-cycle (if `grab_tv_on_play` **and** `oppo_model != M9207` — the M9207 grab is skipped, switch the TV manually), else rely on Kodi reasserting on exit | the only legitimate power-cycle path |
 | `ir_code_kodi` empty | True | play-side switches to OPPO; on stop `_send` no-ops, **TV left on HDMI 1** | `configured()` needs only `ir_code_oppo`; see §10 gap |
 | RM4 unreachable | True | log + leave the TV; OPPO keeps playing | **not** Mi-Box-bleed (corrected §1); real reasons: ~20–24 s OPPO reboot mid-handoff + silently downgrading the chosen IR path |
 | Stale session | True | one re-discover+re-auth+resend per packet, then give up | bounded — no storm |
