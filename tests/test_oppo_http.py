@@ -314,27 +314,37 @@ def test_power_cycle_sends_pon_when_poff_fails(monkeypatch):
     assert sent == ["#PON"]  # #PON fired despite the #POF leg failing
 
 
-# --- verbose heartbeat: a transient HTTP failure is NOT a stop (b1) ---
-def test_verbose_heartbeat_transient_failure_is_not_a_stop(monkeypatch):
-    client = _client()
+class _QuietSock:
+    """A :23 verbose socket that never pushes data (recv always times out)."""
 
-    class _Sock:
-        def sendall(self, data):
-            pass
+    def sendall(self, data):
+        pass
 
-        def settimeout(self, t):
-            pass
+    def settimeout(self, t):
+        pass
 
-        def recv(self, n):
-            raise socket.timeout()  # always quiet -> hit the heartbeat branch every loop
+    def recv(self, n):
+        raise socket.timeout()
 
-        def close(self):
-            pass
+    def close(self):
+        pass
 
-    monkeypatch.setattr(oh.socket, "create_connection", lambda addr, timeout=None: _Sock())
-    clock = itertools.count(0, 100)  # each read delta > 6s, so the heartbeat fires every iteration
+
+class _ChatterSock(_QuietSock):
+    """A :23 verbose socket that streams non-stop chatter with no recognised @UPL end token -- the
+    case that wedged the old watcher (the quiet-only HTTP cross-check never fired)."""
+
+    def recv(self, n):
+        return b"@UTC 0001\r"
+
+
+# --- verbose cross-check: only a RUN of confirmed-idle reads is a stop; a blip is not (b1) ---
+def test_verbose_cross_check_requires_idle_confirmations(monkeypatch):
+    client = _client()  # default config: idle_confirmations=2, poll_interval=5
+    monkeypatch.setattr(oh.socket, "create_connection", lambda addr, timeout=None: _QuietSock())
+    clock = itertools.count(0, 100)  # each iteration advances > poll_interval, so the cross-check fires
     monkeypatch.setattr(oh.time, "time", lambda: next(clock))
-    states = iter(["unknown", "unknown", "idle"])
+    states = iter(["unknown", "playing", "idle", "idle"])
     calls = {"n": 0}
 
     def fake_state():
@@ -343,7 +353,49 @@ def test_verbose_heartbeat_transient_failure_is_not_a_stop(monkeypatch):
 
     monkeypatch.setattr(client, "playback_state", fake_state)
     assert client.verbose_watch_until_stop(lambda: False) is True
-    assert calls["n"] == 3  # ended only on the confirmed 'idle'; the two 'unknown's did not stop it
+    # ended only after TWO consecutive confirmed 'idle' reads; the 'unknown' and 'playing' reset the run
+    assert calls["n"] == 4
+
+
+# --- verbose stop is detected even while the stream never goes quiet (the b1 hang fix) ---
+def test_verbose_stop_detected_during_continuous_chatter(monkeypatch):
+    client = _client()  # default config: idle_confirmations=2, poll_interval=5
+    monkeypatch.setattr(oh.socket, "create_connection", lambda addr, timeout=None: _ChatterSock())
+    clock = itertools.count(0, 100)
+    monkeypatch.setattr(oh.time, "time", lambda: next(clock))
+    states = iter(["idle", "idle"])
+    monkeypatch.setattr(client, "playback_state", lambda: next(states))
+    # recv NEVER times out (continuous @UTC chatter, no @UPL STOP) -> the old code looped forever; the
+    # wall-clock HTTP cross-check now ends it on confirmed idle.
+    assert client.verbose_watch_until_stop(lambda: False) is True
+
+
+# --- verbose watch has an absolute ceiling so it can never hold :23 forever (b1) ---
+def test_verbose_watch_hits_absolute_ceiling(monkeypatch):
+    client = oh.OppoClient(Config(oppo_ip="1.2.3.4", max_watch_seconds=50, poll_interval=5))
+    monkeypatch.setattr(oh.socket, "create_connection", lambda addr, timeout=None: _ChatterSock())
+    clock = itertools.count(0, 40)  # start=0, then 40 (< ceiling), then 80 (> 50s ceiling)
+    monkeypatch.setattr(oh.time, "time", lambda: next(clock))
+    # device keeps chattering and HTTP keeps reporting 'playing' (a stuck flag) -> only the ceiling ends it
+    monkeypatch.setattr(client, "playback_state", lambda: "playing")
+    assert client.verbose_watch_until_stop(lambda: False) is True
+
+
+# --- a recognised @UPL STOP still ends the watch instantly via the push stream (b1 regression) ---
+def test_verbose_push_stop_token_ends_immediately(monkeypatch):
+    client = _client()
+
+    class _StopSock(_QuietSock):
+        def recv(self, n):
+            return b"@UPL STOP\r"
+
+    monkeypatch.setattr(oh.socket, "create_connection", lambda addr, timeout=None: _StopSock())
+    clock = itertools.count(0, 1)  # tiny deltas -> the HTTP cross-check never fires; the token wins
+    monkeypatch.setattr(oh.time, "time", lambda: next(clock))
+    called = {"http": 0}
+    monkeypatch.setattr(client, "playback_state", lambda: called.__setitem__("http", called["http"] + 1) or "playing")
+    assert client.verbose_watch_until_stop(lambda: False) is True
+    assert called["http"] == 0  # ended on the pushed @UPL STOP, no HTTP cross-check needed
 
 
 def test_play_bdmv_root_disc_no_trailing_slash(monkeypatch):
