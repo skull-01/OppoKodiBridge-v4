@@ -185,8 +185,8 @@ def test_play_m9205_mounts_file_folder_and_plays_bare_name(monkeypatch):
 def test_play_m9207_uses_same_layout_as_m9205(monkeypatch):
     # The M9207 NFS layout now matches the M9205 (mount the file's folder, play the bare leaf) -- the
     # earlier export-root/sub-path mode was dropped (unverified on hardware, and the platform won't
-    # play sub-paths of a mount). oppo_model selects the stop-monitor transport and the TV grab now, not the
-    # play path.
+    # play sub-paths of a mount). oppo_model selects only the TV grab now (cec.grab_supported), not the
+    # play path; stop detection is HTTP-only for every model.
     monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
     client = _RecordingClient()
     assert handoff.play(_cfg_model("M9207"), client, "nfs://h/s/06pr0n/clip.mp4") is True
@@ -205,8 +205,8 @@ def test_play_m9207_disc_uses_same_layout_as_m9205(monkeypatch):
 
 def test_oppo_model_does_not_affect_play_path(monkeypatch):
     # Invariant: oppo_model no longer changes the mount/play path -- M9205 and M9207 issue an identical
-    # call sequence. The model selects the stop-monitor transport and the TV grab, NOT the play path
-    # (see test_monitor.py and test_cec.py).
+    # call sequence. The model selects only the TV grab, NOT the play path (see test_cec.py; stop
+    # detection is HTTP-only for every model).
     monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
     a, b = _RecordingClient(), _RecordingClient()
     handoff.play(_cfg_model("M9205"), a, "nfs://h/s/Movies/Dune/BDMV/index.bdmv")
