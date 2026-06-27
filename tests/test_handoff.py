@@ -138,6 +138,19 @@ def test_play_bdmv_falls_back_to_play_file_on_failure(monkeypatch):
     assert ("stop", None) not in client.calls
 
 
+def test_play_loose_bdmv_mounts_containing_dir_not_the_file(monkeypatch):
+    # A bare .bdmv NOT under a BDMV/ folder must mount the dir that CONTAINS it (a real folder) and
+    # open that folder -- never NFS-mount the .bdmv FILE's own path, which hard-crashes the OPPO.
+    monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
+    client = _RecordingClient()
+    assert handoff.play(_cfg(), client, "nfs://h/s/01Movies/Film/index.bdmv") is True
+    assert ("mount", "srv/01Movies") in client.calls       # the disc folder's parent, a real folder
+    assert ("play_bdmv", "Film") in client.calls           # opens the containing folder, not the file
+    # the file path is NEVER mounted (the documented OPPO hard-crash)
+    assert not any(kind == "mount" and folder.endswith("index.bdmv") for kind, folder in client.calls)
+    assert not any(name == "" for kind, name in client.calls if kind in ("play_bdmv", "play_file"))
+
+
 def _cfg_model(model):
     return Config(oppo_ip="x", path_from="nfs://h/s", path_to="srv/nfs/media", oppo_model=model)
 

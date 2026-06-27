@@ -61,12 +61,18 @@ def disc_folder(path: str) -> str:
 
     ``…/Ant-Man (2015)/BDMV/index.bdmv`` -> ``…/Ant-Man (2015)``; a disc structure at the root
     (``BDMV/index.bdmv``) -> ``""`` (the export root itself).
+
+    For a loose disc index file with NO BDMV/VIDEO_TS folder marker (e.g. a bare ``.bdmv`` sitting
+    directly in a movie folder), the disc folder is the directory that CONTAINS the index file, so the
+    leaf is dropped. This keeps the handoff mounting an actual folder -- never NFS-mounting the
+    ``.bdmv`` FILE's own path, which hard-crashes the OPPO.
     """
     text = str(path).replace("\\", "/")
     idx = _disc_marker_index(text.lower())
     if idx >= 0:
         return text[:idx].rstrip("/")
-    return text
+    trimmed = text.rstrip("/")
+    return trimmed.rsplit("/", 1)[0] if "/" in trimmed else ""
 
 
 def is_handoff_target(path: str) -> bool:

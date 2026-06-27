@@ -36,6 +36,14 @@ def test_is_disc_path_detects_a_root_level_disc_segment():
     assert detector.is_disc_path("VIDEO_TS/VTS_01_1.VOB")
 
 
+def test_disc_folder_loose_bdmv_returns_containing_dir():
+    # a bare .bdmv NOT under a BDMV/ folder -> the disc folder is the dir that CONTAINS it (drop the
+    # leaf), so the handoff mounts a real folder and never the .bdmv FILE's own path (OPPO hard-crash).
+    assert detector.disc_folder("01Movies/Film/index.bdmv/") == "01Movies/Film"
+    assert detector.disc_folder("01Movies/Film/index.bdmv") == "01Movies/Film"
+    assert detector.disc_folder("index.bdmv/") == ""  # loose .bdmv at the share root
+
+
 def test_pcf_rules_drive_the_xml():
     xml = pcf.build_xml("/path/to/pcf_player.py", "python3")
     # the iso filetype rule and the bdmv/iso filename rules from detector.PCF_RULES are emitted
