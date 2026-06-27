@@ -65,7 +65,7 @@ sequenceDiagram
     end
 
     loop until playback stops
-        Player->>OPPO: monitor (M9205: #SVM 3 push + HTTP; M9207: HTTP only)
+        Player->>OPPO: monitor — poll /getglobalinfo until idle (HTTP-only, all models)
     end
 
     You->>OPPO: press Stop (or the disc ends)
@@ -87,12 +87,13 @@ sequenceDiagram
   Kodi's own player ever opens the file — there is no momentary Kodi playback before the handoff.
 - **The ~20–24 s cost:** the OPPO only asserts active source on a power-**ON** transition, so the grab
   is a deliberate `#POF`→`#PON` power-cycle.
-- **`oppo_model` gates BOTH sides (since v4.1.2):** on the **M9205** the OPPO grabs the TV (power-cycle)
-  and stop is detected with a verbose `#SVM 3` push watch on `:23` (HTTP cross-check + absolute ceiling,
-  since v4.1.1). On the **M9207 Plus / UDP-203** the grab is skipped entirely (its `#PON` is a no-op
-  that wedges the unit) — switch the TV manually — and stop is detected by HTTP `/getglobalinfo`
-  polling only (it never opens `:23`). Selecting `M9207` is now the single knob; you no longer also
-  have to turn off `grab_tv_on_play`.
+- **Stop detection is HTTP-only for all models** (since v4.1.3): the watch polls `/getglobalinfo` until
+  idle and never opens the OPPO's `:23` verbose channel — matching the proven reference. The earlier
+  M9205-only verbose `#SVM 3` push watch was removed (unverified, and implicated in the remote lockup).
+- **`oppo_model` gates only the grab:** on the **M9205** the OPPO grabs the TV (power-cycle); on the
+  **M9207 Plus / UDP-203** the grab is skipped (its `#PON` is a no-op that wedges the unit) — switch the
+  TV manually. Selecting `M9207` is the single knob; you no longer also have to turn off
+  `grab_tv_on_play`.
 - **Reclaim always runs:** `cec.reclaim_kodi` is in the orchestrator's `finally`, so the TV is
   reclaimed whether playback succeeded or failed — once, never re-asserted.
 
@@ -103,8 +104,8 @@ sequenceDiagram
 On the M9207 clone the OPPO has **no network One-Touch-Play**, so the grab is skipped (`cec.grab_supported`
 is false). The key consequence: you switch the TV **to** the OPPO **manually**, but it switches **back**
 to Kodi **automatically** on stop (the reclaim is Kodi asserting its *own* source, which works on any
-model). Selecting `oppo_model=M9207` is the single knob — it skips the grab *and* uses HTTP-only stop
-detection.
+model). Selecting `oppo_model=M9207` just skips the grab; stop detection is HTTP `/getglobalinfo`
+polling for every model (since v4.1.3), so the M9207 differs from the M9205 only in the manual TV switch.
 
 ![OppoKodiBridge v4 M9207 user journey](diagrams/oppokodibridge-v4-m9207-journey.svg)
 

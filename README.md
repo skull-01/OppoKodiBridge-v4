@@ -52,7 +52,7 @@ playercorefactory external-player process, so there is still no blip):
 | `detector` | which files qualify for handoff (ISO + BDMV/VIDEO_TS) -- one source of truth; `pcf` builds its routing rules from it |
 | `handoff` | tell the OPPO to play (wake → init → mount → play); pure OPPO HTTP |
 | `cec` | trigger the switch-over -- `grab_oppo` (power-cycle, M9205 only via `grab_supported`) + `reclaim_kodi` (JSON-RPC → `script.cecreclaim` → `CECActivateSource`) |
-| `monitor` | watch playback state (HTTP poll → playing; stop via `#SVM 3` on M9205, HTTP-only on M9207) |
+| `monitor` | watch playback state over HTTP `/getglobalinfo` (poll → playing, then poll → idle; HTTP-only for all models) |
 | `orchestrator` | the flow: detect → grab → play → watch → reclaim |
 
 The in-Kodi service only installs `playercorefactory.xml` and publishes config. The Kodi reclaim goes
