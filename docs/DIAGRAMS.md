@@ -95,3 +95,58 @@ sequenceDiagram
   have to turn off `grab_tv_on_play`.
 - **Reclaim always runs:** `cec.reclaim_kodi` is in the orchestrator's `finally`, so the TV is
   reclaimed whether playback succeeded or failed — once, never re-asserted.
+
+---
+
+## 3 · User journey — M9207 Plus / UDP-203
+
+On the M9207 clone the OPPO has **no network One-Touch-Play**, so the grab is skipped (`cec.grab_supported`
+is false). The key consequence: you switch the TV **to** the OPPO **manually**, but it switches **back**
+to Kodi **automatically** on stop (the reclaim is Kodi asserting its *own* source, which works on any
+model). Selecting `oppo_model=M9207` is the single knob — it skips the grab *and* uses HTTP-only stop
+detection.
+
+![OppoKodiBridge v4 M9207 user journey](diagrams/oppokodibridge-v4-m9207-journey.svg)
+
+> If the image above doesn't render, open the SVG directly:
+> [`docs/diagrams/oppokodibridge-v4-m9207-journey.svg`](diagrams/oppokodibridge-v4-m9207-journey.svg)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor You as You (remote)
+    participant TV
+    participant Kodi
+    participant Player as pcf_player.py (orchestrator)
+    participant OPPO
+    participant Helper as script.cecreclaim
+
+    You->>Kodi: Play a disc (.iso / BDMV / VIDEO_TS)
+    Kodi->>Player: spawn external player (no blip)
+    Note over Player,OPPO: M9207 — grab skipped (no #POF/#PON; cec.grab_supported = false)
+
+    rect rgb(253, 236, 231)
+    Note over You,TV: ★ Manual step — only on the M9207
+    You->>TV: switch the TV input to the OPPO
+    end
+
+    Player->>OPPO: handoff.play — wake, init, NFS mount, play (:436)
+    OPPO-->>You: disc plays on the TV
+    loop until stop (HTTP only)
+        Player->>OPPO: poll /getglobalinfo (never opens :23 / #SVM 3)
+    end
+    You->>OPPO: press Stop (or the disc ends)
+    OPPO-->>Player: playback ended
+
+    rect rgb(233, 240, 254)
+    Note over Player,TV: Stop side — automatic (works on every model)
+    Player->>Kodi: cec.reclaim_kodi — JSON-RPC Addons.ExecuteAddon(script.cecreclaim)
+    Kodi->>Helper: run the helper add-on
+    Helper->>Kodi: xbmc.executebuiltin("CECActivateSource")
+    Kodi-->>TV: HDMI-CEC active source (Kodi's own source)
+    Note over TV: TV returns to Kodi automatically
+    end
+```
+
+> **Asymmetry to remember:** *manual* TV switch **to** the OPPO on play, *automatic* switch **back** to
+> Kodi on stop. The M9205 differs only on the play side (it grabs the TV automatically too).
