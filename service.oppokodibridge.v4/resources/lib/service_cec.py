@@ -99,12 +99,31 @@ def _autofill_ip_on_model_change(prev_model: str) -> str:
     return model
 
 
+def _maybe_launch_first_run_wizard() -> None:
+    """On first run (the wizard hasn't completed / been dismissed), pop the setup wizard once. The
+    wizard.py 'firstrun' guard re-checks the flag, and the wizard sets wizard_done when finished or
+    dismissed, so this won't nag on every start. The Settings button re-runs it on demand."""
+    import xbmc
+    import xbmcaddon
+
+    try:
+        done = (xbmcaddon.Addon(ADDON_ID).getSettingString("wizard_done") or "").lower() in ("true", "1")
+    except Exception as exc:  # pragma: no cover - hardware path
+        log("wizard flag read failed ({}); skipping auto-launch".format(exc))
+        return
+    if done:
+        return
+    log("first run: launching the setup wizard")
+    xbmc.executebuiltin("RunScript(special://home/addons/{}/wizard.py,firstrun)".format(ADDON_ID))
+
+
 def main() -> None:
     import xbmc
 
     log("CEC Control Experiment service starting.")
     _publish_config()
     _install_pcf()
+    _maybe_launch_first_run_wizard()
 
     class _Monitor(xbmc.Monitor):
         def __init__(self) -> None:

@@ -329,6 +329,12 @@ class OppoClient:
     def get_global_info(self) -> dict:
         return self._get_json("/getglobalinfo")
 
+    def get_playing_time(self) -> str:
+        """Raw ``/getplayingtime`` reply -- progress/position info for the current item. Used by the
+        first-run wizard's best-effort mount-path probe (the response format is unconfirmed; returned
+        raw so the wizard can scan it for a file path)."""
+        return self._get("/getplayingtime", timeout=8)
+
     def login_nfs(self, server: str) -> dict:
         return self._get_json("/loginNfsServer?" + urllib.parse.quote('{"serverName":"%s"}' % server))
 

@@ -64,6 +64,13 @@
           </control>
           <data>RunScript(special://home/addons/service.oppokodibridge.v4/settings_tests.py,cec)</data>
         </setting>
+        <setting id="test_wizard" type="action" label="30074">
+          <level>0</level>
+          <control type="button" format="action">
+            <close>true</close>
+          </control>
+          <data>RunScript(special://home/addons/service.oppokodibridge.v4/wizard.py)</data>
+        </setting>
       </group>
     </category>
     <category id="paths" label="30010">
@@ -146,6 +153,29 @@
           <default></default>
           <control type="edit" format="string">
             <heading>30067</heading>
+          </control>
+        </setting>
+      </group>
+    </category>
+    <category id="internal" label="30040">
+      <group id="1">
+        <setting id="wizard_done" type="boolean" label="30077">
+          <level>3</level>
+          <default>false</default>
+          <control type="toggle"/>
+        </setting>
+        <setting id="detected_iso_path" type="string" label="30075">
+          <level>3</level>
+          <default></default>
+          <control type="edit" format="string">
+            <heading>30075</heading>
+          </control>
+        </setting>
+        <setting id="detected_bdmv_path" type="string" label="30076">
+          <level>3</level>
+          <default></default>
+          <control type="edit" format="string">
+            <heading>30076</heading>
           </control>
         </setting>
       </group>
