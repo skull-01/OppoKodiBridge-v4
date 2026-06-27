@@ -36,6 +36,14 @@ def test_is_disc_path_detects_a_root_level_disc_segment():
     assert detector.is_disc_path("VIDEO_TS/VTS_01_1.VOB")
 
 
+def test_pcf_rules_match_a_root_level_disc_segment():
+    # The generated XML rule must match a disc segment at the path START too (no leading slash), in
+    # lockstep with the runtime _disc_marker_index -- otherwise the two drift for a root-level path.
+    assert _xml_would_route("BDMV/STREAM/00800.m2ts")
+    assert _xml_would_route("VIDEO_TS/VTS_01_1.VOB")
+    assert _xml_would_route("nfs://h/s/X/VIDEO_TS/VTS_01_1.VOB")  # the prefixed case still matches
+
+
 def test_disc_folder_loose_bdmv_returns_containing_dir():
     # a bare .bdmv NOT under a BDMV/ folder -> the disc folder is the dir that CONTAINS it (drop the
     # leaf), so the handoff mounts a real folder and never the .bdmv FILE's own path (OPPO hard-crash).
@@ -87,6 +95,8 @@ def test_pcf_rules_and_runtime_agree():
         ("nfs://h/s/X/Y.ISO", True),
         ("nfs://h/s/01Movies/Ant-Man (2015)/BDMV/index.bdmv", True),
         ("nfs://h/s/01Movies/Film/index.bdmv", True),  # .bdmv leaf NOT under a BDMV/ dir -> exercises the suffix rule alone
+        ("BDMV/index.bdmv", True),  # root-level disc segment (no host/share prefix) -> XML & runtime must agree
+        ("VIDEO_TS/VIDEO_TS.IFO", True),
         ("nfs://h/s/01Movies/Ant-Man (2015)/BDMV/STREAM/00800.m2ts", True),
         ("nfs://h/s/X/VIDEO_TS/VIDEO_TS.IFO", True),
         ("nfs://h/s/01Movies/Film/HVDVD_TS/HV000I01.EVO", False),

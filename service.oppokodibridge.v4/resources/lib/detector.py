@@ -24,7 +24,10 @@ def _build_pcf_rules():
     "filename" -- DERIVED from the segment + suffix constants above (plus the ``.iso`` image rules), so
     this XML definition and the runtime ``is_handoff_target`` are guaranteed to match the same files."""
     rules = [("filetypes", "iso"), ("filename", r"(?i).*\.iso$")]
-    rules += [("filename", "(?i).*/{}/.*".format(seg)) for seg in _DISC_SEGMENTS]
+    # ``(^|.*/)`` so a disc segment at the START of the path matches too -- exactly like the runtime
+    # ``_disc_marker_index`` (which matches ``seg + "/"`` at index 0). A ``.*/``-only pattern required a
+    # leading slash and so diverged from the classifier for a root-level BDMV/VIDEO_TS path.
+    rules += [("filename", "(?i)(^|.*/){}/.*".format(seg)) for seg in _DISC_SEGMENTS]
     rules += [("filename", r"(?i).*\{}$".format(suffix)) for suffix in _DISC_FILE_SUFFIXES]
     return tuple(rules)
 
