@@ -25,3 +25,14 @@ Off-box suite: **90 passed** (`PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest
 
 > Only the operator closes issues. When a row passes, close the linked issue (the implementing SHA is
 > commented on it and it carries `status:awaiting-verify`).
+
+---
+
+## Model-gated OPPO grab — branch `fix/model-gated-grab` (→ v4.1.2)
+
+Off-box suite: **93 passed**.
+
+| # | Issue / SHA | Check | What you should see |
+|---|-------------|-------|---------------------|
+| 7 | [#5](https://github.com/skull-01/OppoKodiBridge-v4/issues/5) | **M9207 (your unit), `oppo_model=M9207`, leave `grab_tv_on_play` ON:** start a disc. | The OPPO is **not** power-cycled (no `#POF`/`#PON`); the box is not put to sleep; the IR remote stays responsive. You switch the TV to the OPPO input manually. Playback + the Kodi reclaim on stop still work. |
+| 8 | [#5](https://github.com/skull-01/OppoKodiBridge-v4/issues/5) | **M9205 (if available), `oppo_model=M9205`, `grab_tv_on_play` ON:** start a disc. | The OPPO power-cycles and grabs the TV (its own One-Touch-Play) exactly as before — no regression. |

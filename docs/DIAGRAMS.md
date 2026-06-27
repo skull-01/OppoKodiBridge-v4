@@ -23,9 +23,11 @@ player → no pre-play blip). That process has **no `xbmc` API**, so it cannot c
 `addonid: script.cecreclaim`); the tiny in-Kodi **`script.cecreclaim`** helper runs the
 `CECActivateSource` builtin so Kodi re-announces **its own** active source and the TV returns to Kodi.
 The grab side does **not** use the helper — the OPPO grabs the TV via its own One-Touch-Play, forced by
-a `#POF`→`#PON` power-cycle. Each device asserts only its **own** HDMI source (no IR, no spoofed
-initiator), and both assertions are **single-shot** (tied to play/stop events — no standing
-re-asserter, so a manual input change sticks).
+a `#POF`→`#PON` power-cycle. **The grab is model-gated** (`cec.grab_supported`): on the M9207 Plus /
+UDP-203 the network power-cycle is a no-op that also wedges the unit, so the grab is skipped entirely
+and the TV is switched to the OPPO input manually. Each device asserts only its **own** HDMI source
+(no IR, no spoofed initiator), and both assertions are **single-shot** (tied to play/stop events — no
+standing re-asserter, so a manual input change sticks).
 
 ---
 
@@ -50,10 +52,14 @@ sequenceDiagram
     Player->>Player: read runtime_config.json
 
     rect rgb(231, 244, 238)
-    Note over Player,TV: Play side — the OPPO grabs the TV
-    Player->>OPPO: cec.grab_oppo — power-cycle (#POF then #PON)
-    OPPO-->>TV: HDMI-CEC One-Touch-Play (OPPO's own source)
-    Note over TV: TV switches to the OPPO input
+    Note over Player,TV: Play side — switch the TV to the OPPO (model-gated grab)
+    alt oppo_model = M9205 (grab-capable)
+        Player->>OPPO: cec.grab_oppo — power-cycle (#POF then #PON)
+        OPPO-->>TV: HDMI-CEC One-Touch-Play (OPPO's own source)
+        Note over TV: TV switches to the OPPO input
+    else oppo_model = M9207 / UDP-203 (no network grab)
+        Note over You,TV: grab skipped — switch the TV to the OPPO input manually
+    end
     Player->>OPPO: handoff.play — wake, init, NFS mount, play
     OPPO-->>You: disc plays on the TV
     end
@@ -80,10 +86,12 @@ sequenceDiagram
 - **No blip:** Kodi's `playercorefactory.xml` routes disc content to the external player *before*
   Kodi's own player ever opens the file — there is no momentary Kodi playback before the handoff.
 - **The ~20–24 s cost:** the OPPO only asserts active source on a power-**ON** transition, so the grab
-  is a deliberate `#POF`→`#PON` power-cycle. (On the M9207 Plus / UDP-203 clone the network power-cycle
-  is a no-op; switch that unit's input manually and set `grab_tv_on_play = false`.)
-- **Stop detection is model-aware:** the M9205 opens a verbose `#SVM 3` push watch on `:23` (with an
-  HTTP cross-check + an absolute time ceiling, since v4.1.1); the M9207 uses HTTP `/getglobalinfo`
-  polling only and never opens `:23`.
+  is a deliberate `#POF`→`#PON` power-cycle.
+- **`oppo_model` gates BOTH sides (since v4.1.2):** on the **M9205** the OPPO grabs the TV (power-cycle)
+  and stop is detected with a verbose `#SVM 3` push watch on `:23` (HTTP cross-check + absolute ceiling,
+  since v4.1.1). On the **M9207 Plus / UDP-203** the grab is skipped entirely (its `#PON` is a no-op
+  that wedges the unit) — switch the TV manually — and stop is detected by HTTP `/getglobalinfo`
+  polling only (it never opens `:23`). Selecting `M9207` is now the single knob; you no longer also
+  have to turn off `grab_tv_on_play`.
 - **Reclaim always runs:** `cec.reclaim_kodi` is in the orchestrator's `finally`, so the TV is
   reclaimed whether playback succeeded or failed — once, never re-asserted.
