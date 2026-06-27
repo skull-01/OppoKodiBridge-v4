@@ -106,6 +106,25 @@ def test_detect_path_from_matches_urlencoded_media_against_decoded_source():
     assert oh.detect_path_from(media, ["nfs://192.168.1.177/share/A B"]) == "nfs://192.168.1.177/share/A B"
 
 
+def test_detect_path_from_skips_exact_equal_source():
+    # an exact-equal source has no in-share remainder -> split_share_relative would reject it (strand),
+    # so it must NOT be selected; longest-prefix falls through to the broader, mappable source.
+    sources = ["nfs://h/share", "nfs://h/share/Movies/Dune"]
+    assert oh.detect_path_from("nfs://h/share/Movies/Dune", sources) == "nfs://h/share"
+    assert oh.detect_path_from("nfs://h/share/Movies/Dune/", sources) == "nfs://h/share"  # trailing slash
+    # only the exact-equal source present -> None (so the typed fallback runs, never a strand)
+    assert oh.detect_path_from("nfs://h/share/Movies/Dune", ["nfs://h/share/Movies/Dune"]) is None
+
+
+def test_detect_path_from_skips_pathless_host_source():
+    # a bare scheme://host with no share path can't be a root (the host/share name would fold into the
+    # in-share folder) -> skipped; a host + at least one path segment IS a valid root.
+    assert oh.detect_path_from("nfs://192.168.1.177/share/x.iso", ["nfs://192.168.1.177"]) is None
+    assert oh.detect_path_from("nfs://192.168.1.177/share/x.iso", ["nfs://192.168.1.177/"]) is None
+    assert oh.detect_path_from("nfs://192.168.1.177/share/x.iso", ["nfs://192.168.1.177/share"]) == \
+        "nfs://192.168.1.177/share"
+
+
 def test_nfs_server_from_devices():
     devices = {
         "devicelist": [

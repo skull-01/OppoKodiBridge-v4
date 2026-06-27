@@ -52,7 +52,7 @@ msgid "OPPO path prefix (e.g. /mnt/nas/media)"
 msgstr ""
 
 msgctxt "#30013"
-msgid "Auto-detect the Kodi path prefix from Kodi's own sources (the field below is the fallback)"
+msgid "Auto-detect the Kodi path prefix from Kodi's sources when the field below is blank or doesn't match"
 msgstr ""
 
 msgctxt "#30020"

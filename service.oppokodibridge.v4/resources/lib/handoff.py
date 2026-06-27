@@ -38,18 +38,20 @@ def play(config, client, kodi_file: str, should_abort=None) -> bool:
     if should_abort is None:
         should_abort = lambda: False
 
-    # path_from is the Kodi-side share root we strip to get the in-share path. Prefer what Kodi is
-    # ACTUALLY serving (its configured sources, longest-prefix match) over the typed setting, so the
-    # mapping adapts to the live share; fall back to the typed path_from when detection is off, the
-    # Kodi JSON-RPC is unreachable, or no source contains the file. Kodi-side only -- no OPPO contact.
+    # path_from (the Kodi-side share root we strip) pairs with path_to (the OPPO export root) at the
+    # SAME depth, so a correctly-typed path_from is AUTHORITATIVE: use it whenever it maps the file --
+    # never override it (a detected root at a different depth would mis-anchor path_to and mis-mount).
+    # Only when the typed path_from does NOT map (blank or stale) do we consult Kodi's OWN configured
+    # sources and re-derive path_from (longest-prefix). Kodi-side only -- no OPPO contact, best-effort.
+    target = kodi_file.rstrip("/")
     path_from = config.path_from
-    if getattr(config, "path_from_autodetect", True):
-        detected = detect_path_from(kodi_file, cec.kodi_video_sources(config))
+    folder, basename = split_share_relative(target, path_from)
+    if not basename and getattr(config, "path_from_autodetect", True):
+        detected = detect_path_from(target, cec.kodi_video_sources(config))
         if detected:
+            log("path_from auto-detected from Kodi sources: {!r} (typed prefix did not map)".format(detected))
             path_from = detected
-            log("path_from auto-detected from Kodi sources: {!r}".format(detected))
-
-    folder, basename = split_share_relative(kodi_file.rstrip("/"), path_from)
+            folder, basename = split_share_relative(target, path_from)
     if not basename:
         log("Cannot map {!r} with path_from={!r}".format(kodi_file, path_from))
         return False

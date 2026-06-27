@@ -126,21 +126,36 @@ def _decode_share(text: str) -> str:
     return text
 
 
+def _has_share_path(prefix: str) -> bool:
+    """A ``scheme://authority`` with NO path component can't be a share root (the host/share name would
+    fold into the in-share path). Require at least one ``/`` after the ``://`` authority."""
+    if "://" in prefix:
+        return "/" in prefix.split("://", 1)[1]
+    return True
+
+
 def detect_path_from(media_file: str, sources) -> Optional[str]:
     """The Kodi source root the played ``media_file`` lives under -- i.e. ``path_from`` derived from
-    Kodi's OWN configured sources instead of the typed setting. Longest-prefix wins, with the same
-    path-boundary rule as ``split_share_relative`` (so a sibling share whose name merely EXTENDS another
-    -- ``Super3Share-4K`` vs ``Super3Share`` -- never mis-matches). Returns the matching root (trailing
-    slash stripped) or ``None`` when no source contains the file. Pure: feed it ``kodi_video_sources``."""
+    Kodi's OWN configured sources instead of the typed setting. Longest-prefix wins, with the SAME
+    accept rule as ``split_share_relative``: a candidate matches only when the file sits strictly BELOW
+    it (a non-empty in-share remainder). So a source that EQUALS the played path -- which
+    ``split_share_relative`` would reject as unmappable, stranding the handoff -- is never selected;
+    longest-prefix then falls through to the broader, mappable source. Boundary-safe (``Super3Share-4K``
+    never matches ``Super3Share``); a path-less ``scheme://host`` source is skipped. Returns the matching
+    root (trailing slash stripped) or ``None``. Pure: pass the result to ``split_share_relative`` as
+    ``path_from``."""
     text = _decode_share(media_file)
     best: Optional[str] = None
     for source in sources or []:
         prefix = _decode_share(source).strip().rstrip("/")
-        if not prefix:
+        if not prefix or not _has_share_path(prefix):
             continue
-        if text == prefix or text.startswith(prefix + "/"):
-            if best is None or len(prefix) > len(best):
-                best = prefix
+        if not text.startswith(prefix + "/"):
+            continue
+        if not text[len(prefix):].lstrip("/"):
+            continue  # exact-equal / prefix-plus-slashes: no in-share path -> split would reject it
+        if best is None or len(prefix) > len(best):
+            best = prefix
     return best
 
 
