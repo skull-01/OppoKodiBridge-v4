@@ -331,3 +331,69 @@ def test_play_autodetect_off_never_queries_even_when_typed_fails(monkeypatch):
     cfg = Config(oppo_ip="x", path_from="nfs://wrong/root", path_to="srv", path_from_autodetect=False)
     assert handoff.play(cfg, client, "nfs://h/share/Movies/clip.mp4") is False
     assert called["n"] == 0
+
+
+# --- NFS mount hardening: reference-faithful retry + corruption-safety ------------------------------
+# skull-01/emby-chinoppo-bridge-ri: <=2 mount attempts, re-login (NEVER unmount) between, abort before
+# play if both fail; a timeout/None reply is a failure, not a silent success.
+
+class _MountClient(_FakeClient):
+    """Per-attempt mount replies + records play calls. A reply that IS an Exception is raised
+    (simulates a mount timeout -> OppoError -> _best_effort returns None)."""
+
+    def __init__(self, mount_replies, play_reply=None):
+        super().__init__(play_reply if play_reply is not None else {"success": True})
+        self._mounts = list(mount_replies)
+        self.mount_attempts = 0
+        self.calls = []
+
+    def mount_nfs(self, server, folder):
+        self.mount_attempts += 1
+        r = self._mounts.pop(0) if self._mounts else {"success": False}
+        if isinstance(r, Exception):
+            raise r
+        return r
+
+    def play_file(self, server, name):
+        self.calls.append(("play_file", name)); return self._reply
+
+    def play_bdmv(self, name):
+        self.calls.append(("play_bdmv", name)); return self._reply
+
+    def stop(self):
+        self.calls.append(("stop", None)); return {}
+
+
+def _cfg_mount():
+    return Config(oppo_ip="x", path_from="nfs://h/s", path_to="srv", path_from_autodetect=False)
+
+
+def test_play_aborts_when_mount_fails_both_attempts(monkeypatch):
+    # Both mount attempts fail -> abort BEFORE any play (never fire a play into a bad mount), and never
+    # unmount (unmount-when-empty corrupts the OPPO NFS client). Returns False.
+    monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
+    client = _MountClient([{"success": False, "retInfo": "failed"},
+                           {"success": False, "retInfo": "failed"}])
+    assert handoff.play(_cfg_mount(), client, "nfs://h/s/Movies/x.iso") is False
+    assert client.mount_attempts == 2                                  # bounded: exactly 2
+    assert not any(k in ("play_file", "play_bdmv") for k, _ in client.calls)  # never played
+
+
+def test_play_mount_succeeds_on_retry(monkeypatch):
+    # First mount fails, retry succeeds -> play proceeds (the normal hardware path: the OPPO's first
+    # mount reliably returns 'failed').
+    monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
+    client = _MountClient([{"success": False, "retInfo": "failed"}, {"success": True}])
+    assert handoff.play(_cfg_mount(), client, "nfs://h/s/Movies/clip.mp4") is True
+    assert client.mount_attempts == 2
+    assert ("play_file", "clip.mp4") in client.calls
+
+
+def test_play_aborts_when_mount_times_out(monkeypatch):
+    # A mount timeout (OppoError -> _best_effort None) counts as a FAILURE, not a silent success ->
+    # abort, no play. (Previously a None reply slipped through reply_failed and played into nothing.)
+    monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
+    client = _MountClient([handoff.OppoError("timeout"), handoff.OppoError("timeout")])
+    assert handoff.play(_cfg_mount(), client, "nfs://h/s/Movies/x.iso") is False
+    assert client.mount_attempts == 2
+    assert not any(k in ("play_file", "play_bdmv") for k, _ in client.calls)

@@ -93,12 +93,29 @@ def play(config, client, kodi_file: str, should_abort=None) -> bool:
 
     mount_folder = oppo_mount_folder(mount_rel, config.path_to)
     log("Handoff: server={} disc={} mount={!r} play={!r}".format(server, is_disc, mount_folder, play_name))
-    mount = _best_effort(lambda: client.mount_nfs(server, mount_folder), "mount")
-    if reply_failed(mount):
-        log("mount failed ({}); re-login and retry".format(mount.get("retInfo") or mount.get("msg")))
-        _best_effort(lambda: client.login_nfs(server), "re-login")
-        interruptible_sleep(2.0, should_abort)
-        _best_effort(lambda: client.mount_nfs(server, mount_folder), "mount retry")
+    # Mount the file's folder -- reference-faithful (skull-01/emby-chinoppo-bridge-ri playback.py):
+    # at most TWO attempts, a fresh login (NEVER an unmount) between them, and ABORT before play if both
+    # fail. Corruption-safety learned on hardware: hammering login+mount or issuing an unmount when
+    # nothing is mounted drives the OPPO's NFS client into a ~20s-blocking, corrupted state (and can take
+    # down a fragile SMB->NFS proxy) -- so this path never unmounts, treats a timeout/None reply as a
+    # failure (not a silent success), and stops instead of firing a play into a bad mount. The mount
+    # folder is share-relative with NO leading slash (oppo_mount_folder strips it), which the OPPO NFS
+    # client requires -- a leading slash makes it return 'failed'.
+    mounted = False
+    for attempt in range(2):
+        reply = _best_effort(lambda: client.mount_nfs(server, mount_folder), "mount")
+        if reply is not None and not reply_failed(reply):
+            mounted = True
+            break
+        if attempt == 0:
+            why = (reply.get("retInfo") or reply.get("msg")) if isinstance(reply, dict) else "no reply/timeout"
+            log("mount attempt 1 failed ({}); re-login and retry (no unmount -- avoids NFS-client corruption)"
+                .format(why))
+            _best_effort(lambda: client.login_nfs(server), "re-login")
+            interruptible_sleep(2.0, should_abort)
+    if not mounted:
+        log("mount failed after 2 attempts; aborting handoff -- not sending a play into a bad mount")
+        return False
 
     if is_disc:
         # BDMV / VIDEO_TS disc folder. Reference-aligned (emby-chinoppo-bridge): no STP/settle --
