@@ -69,3 +69,17 @@ adversarial re-audit + a clean recursion pass; two HIGH issues found pre-release
 > Detects `path_from` only — `path_to` (the OPPO export root) and the mount point still need the
 > on-device probe (issues #11/#14). Only the operator closes issues; each row's SHA is commented on #9
 > and it carries `status:awaiting-verify`.
+
+---
+
+## NFS mount hardening (corruption-safety) — issue #17
+
+Off-box suite: **127 passed**. `handoff.play` mount is now reference-faithful (skull-01/emby-chinoppo-bridge-ri):
+≤2 attempts, re-login (never unmount) between, timeout/None counts as failure, abort-before-play if both
+fail. Prevents the OPPO NFS-client corruption / ~20s-block that crashed the SMB→NFS proxy this session.
+The abort / timeout / retry paths are **software-verified off-box** (hard to force on hardware).
+
+| # | Issue / SHA | Check | What you should see |
+|---|-------------|-------|---------------------|
+| 14 | [#17](https://github.com/skull-01/OppoKodiBridge-v4/issues/17) `8990cf5` | **No-regression (after the proxy is restored):** play a normal ISO and a BDMV via Kodi handoff, as you did before. | Both still mount and play exactly as before — the first `mountNfsSharedFolder` may log `failed` once then the re-login retry succeeds (normal), and it plays. No new failures. |
+| 15 | [#17](https://github.com/skull-01/OppoKodiBridge-v4/issues/17) `8990cf5` | **Corruption-safety (observational):** over repeated handoffs, watch that the OPPO/proxy stays healthy (no ~20s hangs, no proxy crash). | The add-on never issues an unmount and caps mounts at 2 attempts, so it should not drive the NFS client into the corrupted/blocking state. Report if any hang/crash recurs. |
