@@ -83,3 +83,21 @@ The abort / timeout / retry paths are **software-verified off-box** (hard to for
 |---|-------------|-------|---------------------|
 | 14 | [#17](https://github.com/skull-01/OppoKodiBridge-v4/issues/17) `8990cf5` | **No-regression (after the proxy is restored):** play a normal ISO and a BDMV via Kodi handoff, as you did before. | Both still mount and play exactly as before — the first `mountNfsSharedFolder` may log `failed` once then the re-login retry succeeds (normal), and it plays. No new failures. |
 | 15 | [#17](https://github.com/skull-01/OppoKodiBridge-v4/issues/17) `8990cf5` | **Corruption-safety (observational):** over repeated handoffs, watch that the OPPO/proxy stays healthy (no ~20s hangs, no proxy crash). | The add-on never issues an unmount and caps mounts at 2 attempts, so it should not drive the NFS client into the corrupted/blocking state. Report if any hang/crash recurs. |
+
+---
+
+## IR bench/dev tools — branch `feat/ir-dev-tools` (#24, #25)
+
+Off-box suite: **182 passed** (`PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q --basetemp=<writable>`).
+Two Tkinter **dev tools** (NOT shipped in the add-on): a Windows ZJIoT-serial console (#24) and a
+Raspberry Pi 4 LIRC console (#25). All logic is unit-tested off-box; end-to-end needs the hardware you
+**don't have yet** (ZJIoT module + USB-TTL; a Pi with a wired IR blaster/receiver on a Desktop/VNC
+session). Two independent audits (one per app), confirmed fixes folded in. Rows 16/18/19 are blocked on
+hardware; row 17 runs now on any Windows box.
+
+| # | Issue / SHA | Check | What you should see |
+|---|-------------|-------|---------------------|
+| 16 | [#24](https://github.com/skull-01/OppoKodiBridge-v4/issues/24) `48d180a` | **ZJIoT console (needs the module + USB-TTL):** `pip install -r tools/requirements-dev.txt`, plug the USB-TTL, `python tools/zjiot_console.py`, pick the COM port + baud, Connect. | The port lists and Connect succeeds (log: "connected COMx @ …"); Send NEC / Send slot / Send exact draw module ACKs; **Learn** captures a code from a remote into the library. |
+| 17 | [#24](https://github.com/skull-01/OppoKodiBridge-v4/issues/24) `48d180a` | **ZJIoT no-hardware smoke (any Windows, runnable now):** run it with nothing plugged in. | The window opens; the log notes "no serial ports (is pyserial installed…)"; buttons show a friendly error dialog rather than crashing. |
+| 18 | [#25](https://github.com/skull-01/OppoKodiBridge-v4/issues/25) `48d180a` | **LIRC console (needs a Pi + wired IR, RPi OS Desktop/VNC):** `sudo apt install v4l-utils`, enable the `pwm-ir-tx`/`gpio-ir` overlays, `python3 tools/lirc_console.py`, Refresh. | TX and RX auto-classify into the dropdowns; Send NEC blasts (phone-camera flicker); **Loopback self-test** logs PASS when TX→RX are wired + aimed. |
+| 19 | [#25](https://github.com/skull-01/OppoKodiBridge-v4/issues/25) `48d180a` | **LIRC learn (needs a Pi + RX):** point the TCL remote's HDMI/Source button at the receiver, Learn decoded (nec). | The real scancode is captured and can be saved to the shared library + replayed via Send NEC — this is how you get the true code instead of the disputed `0x57E3`. |
