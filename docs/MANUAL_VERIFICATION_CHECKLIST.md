@@ -101,3 +101,23 @@ hardware; row 17 runs now on any Windows box.
 | 17 | [#24](https://github.com/skull-01/OppoKodiBridge-v4/issues/24) `48d180a` | **ZJIoT no-hardware smoke (any Windows, runnable now):** run it with nothing plugged in. | The window opens; the log notes "no serial ports (is pyserial installed…)"; buttons show a friendly error dialog rather than crashing. |
 | 18 | [#25](https://github.com/skull-01/OppoKodiBridge-v4/issues/25) `48d180a` | **LIRC console (needs a Pi + wired IR, RPi OS Desktop/VNC):** `sudo apt install v4l-utils`, enable the `pwm-ir-tx`/`gpio-ir` overlays, `python3 tools/lirc_console.py`, Refresh. | TX and RX auto-classify into the dropdowns; Send NEC blasts (phone-camera flicker); **Loopback self-test** logs PASS when TX→RX are wired + aimed. |
 | 19 | [#25](https://github.com/skull-01/OppoKodiBridge-v4/issues/25) `48d180a` | **LIRC learn (needs a Pi + RX):** point the TCL remote's HDMI/Source button at the receiver, Learn decoded (nec). | The real scancode is captured and can be saved to the shared library + replayed via Send NEC — this is how you get the true code instead of the disputed `0x57E3`. |
+
+---
+
+## v4.2.0 — reference-parity hardening (#18–#22) + pluggable TV-switch (#23/#26/#27)
+
+Off-box suite: **227 passed**. Theme A (bug-sweep) got a standard independent re-audit (reference-aligned to
+`emby-chinoppo-bridge`, clean); Theme C (tvswitch) got a **deep zero-regression fan-out** (cec-default confirmed
+byte-for-byte identical). The IR transports ship **default-off** and are **software-verified only** (no hardware).
+
+| # | Issue / SHA | Check | What you should see |
+|---|-------------|-------|---------------------|
+| 20 | [#18](https://github.com/skull-01/OppoKodiBridge-v4/issues/18) `f6bcb5a` | **No-regression:** play a normal ISO and a BDMV via Kodi handoff. | Both mount + play exactly as before. (A bare `{}` / non-JSON / timeout mount reply now ABORTS before play instead of firing into a bad mount — the intended change.) |
+| 21 | [#19](https://github.com/skull-01/OppoKodiBridge-v4/issues/19) `f6bcb5a` | **Stability (observational):** over many handoffs, watch for any uncaught crash of the external player mid-playback. | No mid-playback crash from a transport hiccup; the TV reclaim always runs (HTTPException is now caught). |
+| 22 | [#20](https://github.com/skull-01/OppoKodiBridge-v4/issues/20) `f6bcb5a` | **M9207:** Settings → "CEC switch-over test" on an M9207. | It shows "this model has no network CEC grab — skipped; switch manually" and does **not** power-cycle / wedge the unit. |
+| 23 | [#21](https://github.com/skull-01/OppoKodiBridge-v4/issues/21) `f6bcb5a` | **Large UHD ISO:** play a big ISO that buffers slowly. | The TV is **not** reclaimed mid-load (~90s patience). ⚠️ **M2 note:** a genuinely >90s *silent* load could trigger the one-shot auto-heal (which sends STP then re-plays) — report if a big ISO ever gets interrupted at ~90s. |
+| 24 | [#22](https://github.com/skull-01/OppoKodiBridge-v4/issues/22) `f6bcb5a` | **Slow proxy (after the proxy is restored):** handoff over the fragile SMB→NFS proxy. | Fewer false handoff failures. ⚠️ **M1 note:** on an *unreachable* OPPO the stop-watch now takes longer (~40–80s) to give up and reclaim the TV — bounded and expected (raised timeouts + one retry). |
+| 25 | [#26](https://github.com/skull-01/OppoKodiBridge-v4/issues/26) `94ef41a` | **cec default no-regression:** leave `tv_switch_method` = `cec` (the default). | Grab/reclaim behave identically to v4.1.7 — the zero-regression guarantee (audited). |
+| 26 | [#23](https://github.com/skull-01/OppoKodiBridge-v4/issues/23)/[#26](https://github.com/skull-01/OppoKodiBridge-v4/issues/26) `94ef41a` | **lirc (needs RPi4 host + wired IR):** set `tv_switch_method=lirc` + `ir_code_oppo`/`ir_code_kodi` (captured via `tools/lirc_console.py`), `ir_lirc_device`. Play then stop. | TV switches to the OPPO on play and back to Kodi on stop via `ir-ctl` — no OPPO power-cycle. |
+| 27 | [#26](https://github.com/skull-01/OppoKodiBridge-v4/issues/26) `94ef41a` | **ir (needs Ugoos host + ZJIoT module):** set `tv_switch_method=ir` + `ir_serial_port` + codes. Play/stop. | TV switches via the serial IR module. ⚠️ Confirm the ZJIoT wire format on real hardware (the codec carries a "confirm-on-hardware" warning). |
+| 28 | [#27](https://github.com/skull-01/OppoKodiBridge-v4/issues/27) `94ef41a` | **Provisioner (needs a Pi):** `python3 tools/setup_rpi4_lirc.py` (dry-run), then `sudo … --apply`. Re-run `--apply`. | Dry-run prints the plan and writes nothing; `--apply` installs v4l-utils + adds the overlay to the correct `config.txt` (a `.okb-bak` backup is made) and reports a reboot is needed; the re-run is a no-op (idempotent). |
