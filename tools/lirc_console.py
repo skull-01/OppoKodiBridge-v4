@@ -78,14 +78,14 @@ class LircController:
         ctl.send_raw(self.tx.path, timings, run_fn=self._run)
         self.log("sent {} edge(s) on {}".format(len(timings), self.tx.path))
 
-    def learn_raw(self):
+    def learn_raw(self, timeout=10.0):
         self._require_rx()
-        timings = ctl.learn_raw(self.rx.path, run_fn=self._run)
+        timings = ctl.learn_raw(self.rx.path, run_fn=self._run, timeout=timeout)
         self.log("captured {} raw edge(s)".format(len(timings)))
         return timings
 
-    def learn_decoded(self, protocol="nec"):
-        seen = ctl.learn_decoded(protocol, run_fn=self._run)
+    def learn_decoded(self, protocol="nec", timeout=10.0):
+        seen = ctl.learn_decoded(protocol, run_fn=self._run, timeout=timeout)
         self.log("decoded: {}".format(", ".join(seen) if seen else "(none)"))
         return seen
 
@@ -144,11 +144,11 @@ if _TK_OK:
             ttk.Button(row, text="↻ Refresh", command=self._refresh).pack(side="left")
             ttk.Label(row, text="TX").pack(side="left", padx=(10, 2))
             self.tx_var = tk.StringVar()
-            self.tx_box = ttk.Combobox(row, textvariable=self.tx_var, width=16)
+            self.tx_box = ttk.Combobox(row, textvariable=self.tx_var, width=16, state="readonly")
             self.tx_box.pack(side="left")
             ttk.Label(row, text="RX").pack(side="left", padx=(10, 2))
             self.rx_var = tk.StringVar()
-            self.rx_box = ttk.Combobox(row, textvariable=self.rx_var, width=16)
+            self.rx_box = ttk.Combobox(row, textvariable=self.rx_var, width=16, state="readonly")
             self.rx_box.pack(side="left")
 
             send = tkutil.section(self, "Send")
@@ -265,7 +265,7 @@ if _TK_OK:
 
                 def cap():
                     try:
-                        result["seen"] = self.ctl.learn_decoded("nec")
+                        result["seen"] = self.ctl.learn_decoded("nec", timeout=7)
                     except Exception as exc:
                         result["err"] = str(exc)
 

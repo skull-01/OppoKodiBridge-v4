@@ -78,7 +78,7 @@ def parse_raw_capture(text: str):
     for tok in re.split(r"[\s]+", text.strip()):
         if not tok:
             continue
-        if tok.lstrip("+-").isdigit() and tok[0] in "+-":
+        if tok[0] in "+-" and tok[1:].isdigit():  # single leading sign, digits after
             timings.append(abs(int(tok)))
     if timings:
         return timings
@@ -91,7 +91,7 @@ def parse_raw_capture(text: str):
 
 def learn_raw(dev, run_fn=_run, timeout=10.0):
     """Capture one raw burst via ``ir-ctl -d <dev> -r``; returns durations (µs)."""
-    rc, out, err = run_fn(["ir-ctl", "-d", dev, "-r"])
+    rc, out, err = run_fn(["ir-ctl", "-d", dev, "-r"], timeout=timeout)
     if rc not in (0, 124):
         raise LircToolError("capture failed: {}".format(err.strip() or "rc={}".format(rc)))
     return parse_raw_capture(out)
@@ -108,7 +108,7 @@ def learn_decoded(protocol="nec", run_fn=_run, timeout=10.0):
     Returns the list of scancode strings seen (last one is usually the button
     you pressed).
     """
-    rc, out, err = run_fn(["ir-keytable", "-p", protocol, "-t"])
+    rc, out, err = run_fn(["ir-keytable", "-p", protocol, "-t"], timeout=timeout)
     if rc not in (0, 124):
         raise LircToolError("ir-keytable failed: {}".format(err.strip() or "rc={}".format(rc)))
     return parse_keytable_scancodes(out)
