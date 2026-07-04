@@ -68,6 +68,15 @@ def cmd_control(cfg, dlg):
 
 
 def cmd_cec(cfg, dlg):
+    # #20: model-gate the grab exactly like the orchestrator (cec.grab_supported). On the M9207 Plus /
+    # UDP-203 the power-cycle is a no-op that WEDGES the unit (its #POF sleeps, #PON is a no-op), so the
+    # test must skip it -- running it here would wedge the box just like a real handoff would.
+    if not cec.grab_supported(cfg):
+        dlg.ok("CEC switch-over test",
+               "This model ({}) has no network CEC grab -- its power-cycle is a no-op that can wedge "
+               "the unit, so the test is skipped. Switch the TV to the OPPO input manually.".format(
+                   getattr(cfg, "oppo_model", "")))
+        return
     # The grab uses the configured control transport. Only gate on the network :23 port when NOT in
     # serial mode -- a serial-control user's :23 is irrelevant (and usually closed), and gating on it
     # would permanently block this test for them even though the serial grab works.

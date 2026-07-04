@@ -15,7 +15,7 @@ class Config:
     oppo_http_port: int = 436
     oppo_model: str = "M9205"
     oppo_http_broadcast: str = "255.255.255.255"
-    socket_timeout: float = 4.0
+    socket_timeout: float = 8.0
     handoff_enabled: bool = True
     disc_iso_only: bool = True
     use_json_payload: bool = True
@@ -27,6 +27,13 @@ class Config:
     cec_auto_enable: bool = True
     cec_reclaim_on_stop: bool = True
     grab_tv_on_play: bool = True
+    # TV-switch transport (tvswitch.py). Default 'cec' = the existing HDMI-CEC path (zero regression).
+    tv_switch_method: str = "cec"          # none | cec | ir | lirc
+    ir_serial_port: str = "/dev/ttyUSB0"   # ZJIoT serial IR module (method 'ir', Ugoos/CoreELEC)
+    ir_serial_baud: int = 9600
+    ir_lirc_device: str = "/dev/lirc0"     # kernel IR TX device (method 'lirc', Raspberry Pi 4)
+    ir_code_oppo: str = ""                 # HDMI-input NEC code to switch the TV to the OPPO
+    ir_code_kodi: str = ""                 # HDMI-input NEC code to switch the TV back to Kodi
     oppo_hdmi_phys: str = "1.0.0.0"
     serial_control: bool = False
     serial_port: str = "/dev/ttyUSB0"
@@ -35,6 +42,11 @@ class Config:
     idle_confirmations: int = 2
     max_read_failures: int = 5
     max_watch_seconds: float = 21600.0
+    # Reference ISO patience (#21): wait ~90s for playback to start before giving up (large UHD ISOs
+    # buffer slowly), and auto-heal once (re-issue the play) if it stalls. Internal tunables.
+    playback_start_grace_seconds: float = 90.0
+    # Bounded transient-retry for idempotent OPPO reads on a slow/fragile proxy (#22). Internal.
+    http_retries: int = 1
     kodi_rpc_port: int = 8080
     kodi_rpc_user: str = ""
     kodi_rpc_pass: str = ""
@@ -120,6 +132,12 @@ def from_addon() -> "Config":
         cec_auto_enable=b("cec_auto_enable", True),
         cec_reclaim_on_stop=b("cec_reclaim_on_stop", True),
         grab_tv_on_play=b("grab_tv_on_play", True),
+        tv_switch_method=(s("tv_switch_method", "cec") or "cec").strip().lower(),
+        ir_serial_port=s("ir_serial_port") or "/dev/ttyUSB0",
+        ir_serial_baud=i("ir_serial_baud", 9600),
+        ir_lirc_device=s("ir_lirc_device") or "/dev/lirc0",
+        ir_code_oppo=s("ir_code_oppo").strip(),
+        ir_code_kodi=s("ir_code_kodi").strip(),
         oppo_hdmi_phys=s("oppo_hdmi_phys") or "1.0.0.0",
         serial_control=b("serial_control", False),
         serial_port=s("serial_port") or "/dev/ttyUSB0",

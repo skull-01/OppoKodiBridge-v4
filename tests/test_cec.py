@@ -93,6 +93,16 @@ def test_reclaim_kodi_false_on_non_json_body(monkeypatch):
     assert cec.reclaim_kodi(Config(oppo_ip="x")) is False
 
 
+def test_reclaim_kodi_false_on_httpexception(monkeypatch):
+    # #19: a raw http.client.HTTPException (not an OSError) from the Kodi web server must be caught ->
+    # False, never propagate out of the orchestrator's finally (which would strand the TV).
+    import http.client as hc
+
+    monkeypatch.setattr(cec.urllib.request, "urlopen",
+                        lambda req, timeout=None: (_ for _ in ()).throw(hc.IncompleteRead(b"partial")))
+    assert cec.reclaim_kodi(Config(oppo_ip="x")) is False
+
+
 def test_grab_oppo_nonfatal_on_non_oppoerror():
     # the serial transport can surface non-OppoError types; grab runs before the orchestrator's
     # try/finally, so any escape would skip the reclaim. grab_oppo must absorb them all.

@@ -6,8 +6,9 @@ from resources.lib.config import Config
 
 def _wire(monkeypatch, order):
     monkeypatch.setattr(orchestrator, "OppoClient", lambda cfg: object())
-    monkeypatch.setattr(orchestrator.cec, "grab_oppo", lambda c: order.append("grab"))
-    monkeypatch.setattr(orchestrator.cec, "reclaim_kodi", lambda c: order.append("reclaim"))
+    # default tv_switch_method='cec' -> CecSwitcher, which calls cec.grab_oppo/reclaim_kodi.
+    monkeypatch.setattr(orchestrator.tvswitch.cec, "grab_oppo", lambda c: order.append("grab") or True)
+    monkeypatch.setattr(orchestrator.tvswitch.cec, "reclaim_kodi", lambda c: order.append("reclaim") or True)
     monkeypatch.setattr(orchestrator.monitor, "watch_playback", lambda *a, **k: order.append("watch") or True)
 
 
@@ -70,6 +71,16 @@ def test_run_no_grab_when_disabled(monkeypatch):
                  path_from="nfs://h/s", path_to="srv")
     assert orchestrator.run(cfg, "nfs://h/s/x.iso") is True
     assert "grab" not in order and "reclaim" not in order
+
+
+def test_run_none_method_does_no_tv_switch(monkeypatch):
+    # tv_switch_method='none' -> NullSwitcher: play/watch still run, but no grab and no reclaim.
+    order = []
+    _wire(monkeypatch, order)
+    monkeypatch.setattr(orchestrator.handoff, "play", lambda *a, **k: order.append("play") or True)
+    cfg = Config(oppo_ip="x", tv_switch_method="none", path_from="nfs://h/s", path_to="srv")
+    assert orchestrator.run(cfg, "nfs://h/s/x.iso") is True
+    assert order == ["play", "watch"]
 
 
 def test_run_skips_when_no_oppo_configured(monkeypatch):

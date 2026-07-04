@@ -34,7 +34,7 @@ class _FakeClient:
         return {}
 
     def mount_nfs(self, server, folder):
-        return {}
+        return {"success": True}  # an AFFIRMATIVE mount (a bare {} is no longer treated as success -- #18)
 
     def play_file(self, server, name):
         return self._reply
@@ -76,7 +76,7 @@ class _RecordingClient(_FakeClient):
 
     def mount_nfs(self, server, folder):
         self.calls.append(("mount", folder))
-        return {}
+        return {"success": True}  # affirmative mount (#18)
 
     def play_file(self, server, name):
         self.calls.append(("play_file", name))
@@ -397,3 +397,31 @@ def test_play_aborts_when_mount_times_out(monkeypatch):
     assert handoff.play(_cfg_mount(), client, "nfs://h/s/Movies/x.iso") is False
     assert client.mount_attempts == 2
     assert not any(k in ("play_file", "play_bdmv") for k, _ in client.calls)
+
+
+# --- #18: require an AFFIRMATIVE mount/play reply (tightens #17's abort-before-play) ----------------
+
+def test_play_aborts_when_mount_reply_is_empty(monkeypatch):
+    # A bare {} (or the non-JSON sentinel) is NOT an affirmative mount -- it slipped through the old
+    # `not reply_failed` gate and fired a play into a bad mount. Now both attempts fail -> abort.
+    monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
+    client = _MountClient([{}, {}])
+    assert handoff.play(_cfg_mount(), client, "nfs://h/s/Movies/x.iso") is False
+    assert client.mount_attempts == 2
+    assert not any(k in ("play_file", "play_bdmv") for k, _ in client.calls)
+
+
+def test_play_aborts_when_mount_reply_is_non_json(monkeypatch):
+    # A non-JSON body surfaces as {"raw": ...} -> not a parsed mount confirmation -> abort, no play.
+    monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
+    client = _MountClient([{"raw": "<html>500</html>"}, {"raw": "<html>500</html>"}])
+    assert handoff.play(_cfg_mount(), client, "nfs://h/s/Movies/x.iso") is False
+    assert not any(k in ("play_file", "play_bdmv") for k, _ in client.calls)
+
+
+def test_play_aborts_when_play_reply_is_empty(monkeypatch):
+    # Mount succeeds but the play returns {} -> not an affirmative accept -> False (don't wait for
+    # playback that will never start).
+    monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
+    client = _MountClient([{"success": True}], play_reply={})
+    assert handoff.play(_cfg_mount(), client, "nfs://h/s/Movies/x.iso") is False

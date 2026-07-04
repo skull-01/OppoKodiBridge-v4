@@ -201,6 +201,21 @@ def test_reply_failed_coerces_non_bool_success():
     assert not oh.reply_failed("raw text")
 
 
+def test_reply_succeeded_requires_affirmative():
+    # #18: the abort-before-play gate -- only an AFFIRMATIVE reply counts as success.
+    assert oh.reply_succeeded({"success": True})
+    assert oh.reply_succeeded({"success": 1})
+    assert oh.reply_succeeded({"retInfo": "ok"})       # device omits `success` on a genuine success
+    # NOT affirmative: None/non-dict, empty {}, the non-JSON sentinel {"raw":...}, or explicit failure
+    assert not oh.reply_succeeded(None)
+    assert not oh.reply_succeeded("raw text")
+    assert not oh.reply_succeeded({})
+    assert not oh.reply_succeeded({"raw": "<html>500</html>"})
+    assert not oh.reply_succeeded({"success": False})
+    assert not oh.reply_succeeded({"success": 0})
+    assert not oh.reply_succeeded({"success": "false"})
+
+
 def _client():
     return oh.OppoClient(Config(oppo_ip="1.2.3.4"))
 
@@ -245,6 +260,47 @@ def test_get_raises_oppoerror_on_timeout(monkeypatch):
         raise socket.timeout("timed out")
 
     monkeypatch.setattr(urllib.request, "urlopen", boom)
+    with pytest.raises(oh.OppoError):
+        client._get("/getglobalinfo")
+
+
+def test_get_retries_transient_transport_failure(monkeypatch):
+    # #22: a single transient transport failure is retried (bounded) instead of failing the read.
+    client = _client()
+    calls = {"n": 0}
+
+    class _OK:
+        status = 200
+
+        def read(self):
+            return b"ok"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def flaky(url, timeout=None):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise socket.timeout("transient")
+        return _OK()
+
+    monkeypatch.setattr(urllib.request, "urlopen", flaky)
+    monkeypatch.setattr(oh.time, "sleep", lambda *a, **k: None)
+    assert client._get("/getglobalinfo", retries=1) == "ok"
+    assert calls["n"] == 2  # failed once, retried, succeeded
+
+
+def test_get_raises_oppoerror_on_httpexception(monkeypatch):
+    # #19: http.client.HTTPException is NOT an OSError -- it must be caught and surfaced as OppoError,
+    # not escape and crash the caller mid-playback.
+    import http.client as hc
+
+    client = _client()
+    monkeypatch.setattr(urllib.request, "urlopen",
+                        lambda url, timeout=None: (_ for _ in ()).throw(hc.BadStatusLine("garbage")))
     with pytest.raises(oh.OppoError):
         client._get("/getglobalinfo")
 

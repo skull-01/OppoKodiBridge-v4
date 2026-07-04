@@ -17,6 +17,7 @@ auto-detect ``path_from`` (it is the same 127.0.0.1 web-server channel the recla
 from __future__ import annotations
 
 import base64
+import http.client
 import json
 import urllib.request
 
@@ -81,7 +82,7 @@ def _kodi_jsonrpc(config, method: str, params=None, timeout: float = 5.0):
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode("utf-8", "replace"))
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, http.client.HTTPException) as exc:  # HTTPException is not OSError (#19)
         log("Kodi JSON-RPC {} failed ({}:{}): {}".format(method, host, port, exc))
         return None
 

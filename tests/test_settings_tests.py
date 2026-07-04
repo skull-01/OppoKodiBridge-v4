@@ -38,3 +38,13 @@ def test_cmd_cec_network_still_gated_on_23(monkeypatch):
     monkeypatch.setattr(st, "_tcp_open", lambda host, port, timeout=4.0: False)
     st.cmd_cec(Config(oppo_ip="1.2.3.4", serial_control=False), _Dialog(yesno=True))
     assert calls["grab"] == 0
+
+
+def test_cmd_cec_m9207_skips_grab(monkeypatch):
+    # #20: the M9207 power-cycle wedges the unit -> the guided CEC test must skip the grab ENTIRELY and
+    # explain that the input is switched manually (mirrors the orchestrator's cec.grab_supported gate).
+    calls = _patch_cec(monkeypatch)
+    dlg = _Dialog(yesno=True)
+    st.cmd_cec(Config(oppo_ip="1.2.3.4", oppo_model="M9207"), dlg)
+    assert calls["grab"] == 0 and calls["reclaim"] == 0
+    assert dlg.oks  # an explanatory dialog was shown instead of power-cycling the box

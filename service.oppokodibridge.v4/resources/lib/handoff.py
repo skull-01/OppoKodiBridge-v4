@@ -18,7 +18,7 @@ from .oppo_http import (
     nfs_server_from_devices,
     oppo_mount_folder,
     parse_media_path,
-    reply_failed,
+    reply_succeeded,
     split_share_relative,
 )
 
@@ -104,7 +104,7 @@ def play(config, client, kodi_file: str, should_abort=None) -> bool:
     mounted = False
     for attempt in range(2):
         reply = _best_effort(lambda: client.mount_nfs(server, mount_folder), "mount")
-        if reply is not None and not reply_failed(reply):
+        if reply_succeeded(reply):  # #18: require an AFFIRMATIVE mount ({}/non-JSON/timeout != success)
             mounted = True
             break
         if attempt == 0:
@@ -122,7 +122,7 @@ def play(config, client, kodi_file: str, should_abort=None) -> bool:
         # checkfolderhasBDMV starts the disc directly. If it does not start it, fall back to opening
         # the folder as a file (mirrors the reference's check_folder_has_bdmv -> play_file fallback).
         reply = _best_effort(lambda: client.play_bdmv(play_name), "play-bdmv")
-        if reply is None or reply_failed(reply):
+        if not reply_succeeded(reply):
             log("checkfolderhasBDMV did not start the disc; falling back to play_file")
             reply = _best_effort(lambda: client.play_file(server, play_name), "play-bdmv-fallback")
     elif is_iso_file:
@@ -141,7 +141,10 @@ def play(config, client, kodi_file: str, should_abort=None) -> bool:
         # will never start.
         log("OPPO play call failed (no reply); not waiting for playback")
         return False
-    if reply_failed(reply):
-        log("OPPO rejected the file: {}".format(reply.get("retInfo") or reply.get("msg") or ""))
+    if not reply_succeeded(reply):
+        # #18: an empty / unparseable / explicit-failure reply is NOT an affirmative accept -- don't
+        # wait for playback that will never start (tightens #17's abort-before-play).
+        detail = (reply.get("retInfo") or reply.get("msg") or reply) if isinstance(reply, dict) else reply
+        log("OPPO did not confirm the file: {}".format(detail))
         return False
     return True

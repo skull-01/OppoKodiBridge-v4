@@ -14,6 +14,7 @@ Mirrors the working emby-chinoppo-bridge; community-reverse-engineered, not an o
 """
 from __future__ import annotations
 
+import http.client
 import json
 import socket
 import time
@@ -33,8 +34,10 @@ from .detector import (  # noqa: F401
 )
 from .kodilog import log
 
-MOUNT_TIMEOUT = 25.0
-PLAY_TIMEOUT = 15.0
+# Reference-aligned (skull-01/emby-chinoppo-bridge): the OPPO's mount/play can be slow on a fragile
+# SMB->NFS proxy; a too-short deadline turns a slow-but-fine handoff into a false failure (#22).
+MOUNT_TIMEOUT = 60.0
+PLAY_TIMEOUT = 60.0
 OREMOTE_PORT = 7624
 
 IDLE_STATUSES = {"STOP", "STOPPED", "IDLE", "END", "ENDED", "NO_MEDIA", "NO MEDIA", "HOME"}
@@ -247,6 +250,22 @@ def reply_failed(reply: Any) -> bool:
     return str(value).strip().lower() in _FALSE_TOKENS
 
 
+def reply_succeeded(reply: Any) -> bool:
+    """True only when an OPPO mount/play reply AFFIRMATIVELY confirms success.
+
+    Stricter than ``not reply_failed(...)`` -- this is the abort-before-play gate (#18, tightening
+    #17). A missing/None reply, an empty ``{}``, or the non-JSON sentinel ``{"raw": ...}`` (an
+    unparseable body from a fragile proxy) is NOT a confirmed success, so the handoff aborts instead of
+    firing a play into a bad mount. A parsed JSON object with real content that is not an explicit
+    failure counts as success (the device often omits ``success`` on a genuine success -- see
+    ``reply_failed``)."""
+    if not isinstance(reply, dict) or not reply:
+        return False
+    if set(reply.keys()) == {"raw"}:  # _get_json's non-JSON sentinel -- body did not parse as an object
+        return False
+    return not reply_failed(reply)
+
+
 _BAUD_CONSTS = {
     2400: "B2400", 4800: "B4800", 9600: "B9600", 19200: "B19200",
     38400: "B38400", 57600: "B57600", 115200: "B115200",
@@ -315,23 +334,39 @@ class OppoClient:
     def _base(self) -> str:
         return "http://{}:{}".format(self.cfg.oppo_ip, int(self.cfg.oppo_http_port))
 
-    def _get(self, endpoint: str, timeout: Optional[float] = None) -> str:
+    @property
+    def _read_retries(self) -> int:
+        """Bounded transient-retry count for idempotent READS only (mount/play/stop never retry, so a
+        lost response can't double-fire a side effect). Default 1 (see config.http_retries) -- #22."""
+        return max(0, int(getattr(self.cfg, "http_retries", 1) or 0))
+
+    def _get(self, endpoint: str, timeout: Optional[float] = None, retries: int = 0) -> str:
         url = self._base() + endpoint
         request_timeout = float(timeout if timeout is not None else self.cfg.socket_timeout)
-        try:
-            with urllib.request.urlopen(url, timeout=request_timeout) as response:
-                body = response.read().decode("utf-8", errors="replace")
-                status = getattr(response, "status", 200) or 200
-                if status >= 400:
-                    raise OppoError("OPPO HTTP {} for {}".format(status, url))
-                return body
-        except OppoError:
-            raise
-        except OSError as exc:
-            raise OppoError("OPPO HTTP request failed for {}: {}".format(url, exc)) from exc
+        attempts = max(1, int(retries) + 1)
+        last: Optional[Exception] = None
+        for attempt in range(attempts):
+            try:
+                with urllib.request.urlopen(url, timeout=request_timeout) as response:
+                    body = response.read().decode("utf-8", errors="replace")
+                    status = getattr(response, "status", 200) or 200
+                    if status >= 400:
+                        raise OppoError("OPPO HTTP {} for {}".format(status, url))
+                    return body
+            except OppoError:
+                raise  # a real >=400 status -- not a transport blip, never retried
+            except (OSError, http.client.HTTPException) as exc:
+                # http.client.HTTPException (BadStatusLine / IncompleteRead / ...) is NOT an OSError, so
+                # it previously escaped this handler and crashed the caller mid-playback (#19).
+                last = exc
+                if attempt + 1 < attempts:
+                    time.sleep(0.3)
+                    continue
+                raise OppoError("OPPO HTTP request failed for {}: {}".format(url, exc)) from exc
+        raise OppoError("OPPO HTTP request failed for {}: {}".format(url, last))  # pragma: no cover
 
-    def _get_json(self, endpoint: str, timeout: Optional[float] = None) -> dict:
-        body = self._get(endpoint, timeout=timeout)
+    def _get_json(self, endpoint: str, timeout: Optional[float] = None, retries: int = 0) -> dict:
+        body = self._get(endpoint, timeout=timeout, retries=retries)
         try:
             parsed = json.loads(body)
             return parsed if isinstance(parsed, dict) else {"raw": body}
@@ -368,20 +403,20 @@ class OppoClient:
         return self._port_open(port)
 
     def get_firmware_version(self) -> str:
-        return self._get("/getmainfirmwareversion")
+        return self._get("/getmainfirmwareversion", retries=self._read_retries)
 
     def get_setup_menu(self) -> str:
-        return self._get("/getsetupmenu")
+        return self._get("/getsetupmenu", retries=self._read_retries)
 
     def signin(self, app_ip: str = "127.0.0.1") -> str:
         payload = urllib.parse.quote('{"appIconType":1,"appIpAddress":"%s"}' % app_ip)
         return self._get("/signin?" + payload, timeout=15)
 
     def get_device_list(self) -> dict:
-        return self._get_json("/getdevicelist")
+        return self._get_json("/getdevicelist", retries=self._read_retries)
 
     def get_global_info(self) -> dict:
-        return self._get_json("/getglobalinfo")
+        return self._get_json("/getglobalinfo", retries=self._read_retries)
 
     def get_playing_time(self) -> str:
         """Raw ``/getplayingtime`` reply -- progress/position info for the current item. Used by the
