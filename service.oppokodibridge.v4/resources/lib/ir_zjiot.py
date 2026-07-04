@@ -65,6 +65,8 @@ class ZjiotSwitcher:
             log("ZJIoT IR: empty code; nothing sent")
             return False
         try:
+            # module bus address is fixed at 0 for this release (single-module); getattr keeps it
+            # forward-compatible if an ir_module_addr setting is added later.
             frame = build_nec_frame(s, addr=int(getattr(self.config, "ir_module_addr", 0) or 0))
             self._writer(
                 getattr(self.config, "ir_serial_port", "/dev/ttyUSB0") or "/dev/ttyUSB0",

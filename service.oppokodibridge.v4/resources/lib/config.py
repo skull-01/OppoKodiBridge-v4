@@ -31,7 +31,6 @@ class Config:
     tv_switch_method: str = "cec"          # none | cec | ir | lirc
     ir_serial_port: str = "/dev/ttyUSB0"   # ZJIoT serial IR module (method 'ir', Ugoos/CoreELEC)
     ir_serial_baud: int = 9600
-    ir_module_addr: int = 0
     ir_lirc_device: str = "/dev/lirc0"     # kernel IR TX device (method 'lirc', Raspberry Pi 4)
     ir_code_oppo: str = ""                 # HDMI-input NEC code to switch the TV to the OPPO
     ir_code_kodi: str = ""                 # HDMI-input NEC code to switch the TV back to Kodi
@@ -136,7 +135,6 @@ def from_addon() -> "Config":
         tv_switch_method=(s("tv_switch_method", "cec") or "cec").strip().lower(),
         ir_serial_port=s("ir_serial_port") or "/dev/ttyUSB0",
         ir_serial_baud=i("ir_serial_baud", 9600),
-        ir_module_addr=i("ir_module_addr", 0),
         ir_lirc_device=s("ir_lirc_device") or "/dev/lirc0",
         ir_code_oppo=s("ir_code_oppo").strip(),
         ir_code_kodi=s("ir_code_kodi").strip(),

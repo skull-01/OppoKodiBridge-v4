@@ -48,3 +48,34 @@ def test_switcher_to_oppo_then_kodi():
     sw = ir_lirc.LircSwitcher(cfg, run=run)
     assert sw.to_oppo() is True and sw.to_kodi() is True
     assert sent == ["nec:0x1", "nec:0x2"]
+
+
+# --- the DEFAULT runner (real _run -> subprocess) is exercised too, under a patched subprocess.run ---
+
+def test_default_runner_passes_argv_and_timeout(monkeypatch):
+    seen = {}
+
+    class _P:
+        returncode = 0
+        stderr = ""
+
+    def fake_run(args, capture_output=False, text=False, timeout=None):
+        seen["args"] = list(args)
+        seen["timeout"] = timeout
+        return _P()
+
+    monkeypatch.setattr(ir_lirc.subprocess, "run", fake_run)
+    assert ir_lirc.send_nec("/dev/lirc0", "0x1") is True  # run=None -> real _run
+    assert seen["args"] == ["ir-ctl", "-d", "/dev/lirc0", "-S", "nec:0x1"]
+    assert seen["timeout"] == 4.0
+
+
+def test_default_runner_timeout_and_missing_binary_are_nonfatal(monkeypatch):
+    import subprocess
+
+    monkeypatch.setattr(ir_lirc.subprocess, "run",
+                        lambda *a, **k: (_ for _ in ()).throw(subprocess.TimeoutExpired(["ir-ctl"], 4.0)))
+    assert ir_lirc.send_nec("/dev/lirc0", "0x1") is False
+    monkeypatch.setattr(ir_lirc.subprocess, "run",
+                        lambda *a, **k: (_ for _ in ()).throw(FileNotFoundError("ir-ctl")))
+    assert ir_lirc.send_nec("/dev/lirc0", "0x1") is False
