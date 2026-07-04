@@ -1,0 +1,3 @@
+# Dev/bench-tool dependencies — NOT used by the shipped add-on (which is stdlib-only).
+# Install with:  pip install -r tools/requirements-dev.txt
+pyserial>=3.5   # tools/ir/serial_win.py + tools/zjiot_console.py (Windows serial to the ZJIoT module)
