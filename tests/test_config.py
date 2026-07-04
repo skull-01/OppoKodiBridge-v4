@@ -114,6 +114,29 @@ def test_from_addon_passes_explicit_addon_id(monkeypatch):
     assert cfg.oppo_ip == "1.2.3.4"
 
 
+def test_from_addon_reads_tv_switch_settings(monkeypatch):
+    monkeypatch.setitem(sys.modules, "xbmcaddon", _fake_xbmcaddon({
+        "oppo_ip": "1.2.3.4", "tv_switch_method": "LIRC", "ir_code_oppo": " 0x1 ",
+        "ir_code_kodi": "0x2", "ir_lirc_device": "/dev/lirc1", "ir_serial_port": "/dev/ttyUSB9",
+        "ir_serial_baud": 115200,
+    }))
+    cfg = config_mod.from_addon()
+    assert cfg.tv_switch_method == "lirc"     # normalised to lowercase
+    assert cfg.ir_code_oppo == "0x1"          # stripped
+    assert cfg.ir_code_kodi == "0x2"
+    assert cfg.ir_lirc_device == "/dev/lirc1"
+    assert cfg.ir_serial_port == "/dev/ttyUSB9"
+    assert cfg.ir_serial_baud == 115200
+
+
+def test_from_addon_defaults_tv_switch_to_cec(monkeypatch):
+    # an old install with no tv_switch_method set -> 'cec' (zero regression); IR codes blank.
+    monkeypatch.setitem(sys.modules, "xbmcaddon", _fake_xbmcaddon({"oppo_ip": "1.2.3.4"}))
+    cfg = config_mod.from_addon()
+    assert cfg.tv_switch_method == "cec"
+    assert cfg.ir_code_oppo == "" and cfg.ir_code_kodi == ""
+
+
 def test_from_addon_path_from_autodetect_defaults_true(monkeypatch):
     # undeclared/unset -> dataclass default True (auto-detect path_from from Kodi sources is on)
     monkeypatch.setitem(sys.modules, "xbmcaddon", _fake_xbmcaddon({"oppo_ip": "1.2.3.4"}))

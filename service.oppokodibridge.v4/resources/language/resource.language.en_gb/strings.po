@@ -166,3 +166,43 @@ msgstr ""
 msgctxt "#30077"
 msgid "First-run wizard completed"
 msgstr ""
+
+msgctxt "#30080"
+msgid "TV switch method"
+msgstr ""
+
+msgctxt "#30081"
+msgid "None (switch the TV manually)"
+msgstr ""
+
+msgctxt "#30082"
+msgid "HDMI-CEC (OPPO One-Touch-Play + Kodi reclaim)"
+msgstr ""
+
+msgctxt "#30083"
+msgid "IR - ZJIoT serial module (Ugoos/CoreELEC)"
+msgstr ""
+
+msgctxt "#30084"
+msgid "IR - LIRC / GPIO (Raspberry Pi 4)"
+msgstr ""
+
+msgctxt "#30085"
+msgid "IR code: switch TV to the OPPO (e.g. 0x57e310ef)"
+msgstr ""
+
+msgctxt "#30086"
+msgid "IR code: switch TV back to Kodi"
+msgstr ""
+
+msgctxt "#30087"
+msgid "LIRC device (e.g. /dev/lirc0)"
+msgstr ""
+
+msgctxt "#30088"
+msgid "IR serial port (ZJIoT module, e.g. /dev/ttyUSB0)"
+msgstr ""
+
+msgctxt "#30089"
+msgid "IR serial baud (ZJIoT module)"
+msgstr ""

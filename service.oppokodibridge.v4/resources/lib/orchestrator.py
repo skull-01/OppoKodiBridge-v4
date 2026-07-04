@@ -1,18 +1,18 @@
 """The clean execution flow for one playback handoff (runs in the external pcf_player process):
 
     detector  -> is this a disc the OPPO should play?
-    cec       -> grab the TV for the OPPO (its own One-Touch-Play)
+    tvswitch  -> switch the TV to the OPPO (to_oppo: CEC grab / IR blast, per tv_switch_method)
     handoff   -> tell the OPPO to play the file
     monitor   -> watch until playback stops
-    cec       -> reclaim the TV for Kodi (its own active source)
+    tvswitch  -> switch the TV back to Kodi (to_kodi)
 
-Every CEC assertion is single-shot, tied to an event: the OPPO grab fires once on play, the Kodi
-reclaim fires once on stop (in the ``finally``, so it runs whether playback succeeded or failed). There
-is NO standing re-asserter -- a manual input change must stick.
+Every TV-switch is single-shot, tied to an event: to_oppo fires once on play, to_kodi once on stop (in
+the ``finally``, so it runs whether playback succeeded or failed). There is NO standing re-asserter --
+a manual input change must stick.
 """
 from __future__ import annotations
 
-from . import cec, detector, handoff, monitor
+from . import detector, handoff, monitor, tvswitch
 from .kodilog import log
 from .oppo_http import OppoClient
 
@@ -31,18 +31,11 @@ def run(config, kodi_file: str, should_abort=None) -> bool:
 
     client = OppoClient(config)
 
-    # play-side: the OPPO grabs the TV via its OWN One-Touch-Play (a single power-cycle). Model-gated:
-    # the M9207 Plus / UDP-203 clone has no network grab (its #PON is a no-op and the #POF sleep wedges
-    # the unit), so the grab is skipped ENTIRELY there regardless of grab_tv_on_play -- the TV is
-    # switched to the OPPO input manually. See cec.grab_supported.
-    if getattr(config, "grab_tv_on_play", True):
-        if cec.grab_supported(config):
-            log("Grabbing the TV for the OPPO (power-cycle -> its own One-Touch-Play)")
-            cec.grab_oppo(client)
-        else:
-            log("grab_tv_on_play is on but oppo_model={!r} has no network grab "
-                "(M9207/UDP-203); leaving the TV to be switched to the OPPO manually."
-                .format(getattr(config, "oppo_model", "")))
+    # play-side TV switch (single-shot, non-fatal). The strategy is chosen by tv_switch_method:
+    # 'cec' (default) is the model-gated OPPO One-Touch-Play grab + Kodi reclaim; 'ir'/'lirc' blast the
+    # stored HDMI-input code; 'none' is manual. Default 'cec' reproduces the prior behaviour exactly.
+    switcher = tvswitch.make_switcher(config, client)
+    switcher.to_oppo()
 
     started = False
     try:
@@ -55,8 +48,7 @@ def run(config, kodi_file: str, should_abort=None) -> bool:
             on_stall=lambda: handoff.play(config, client, kodi_file, should_abort),
         )
     finally:
-        # stop-side: reclaim the TV for Kodi -- ONCE, now that the handoff has ended (success OR
-        # failure). Single-shot; never a standing re-asserter.
-        if getattr(config, "cec_reclaim_on_stop", True):
-            cec.reclaim_kodi(config)
+        # stop-side TV switch, ONCE, whether playback succeeded or failed. Single-shot; never a
+        # standing re-asserter (a manual input change must stick).
+        switcher.to_kodi()
     return started

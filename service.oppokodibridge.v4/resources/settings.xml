@@ -108,6 +108,56 @@
           <default>true</default>
           <control type="toggle"/>
         </setting>
+        <setting id="tv_switch_method" type="string" label="30080">
+          <level>0</level>
+          <default>cec</default>
+          <constraints>
+            <options>
+              <option label="30081">none</option>
+              <option label="30082">cec</option>
+              <option label="30083">ir</option>
+              <option label="30084">lirc</option>
+            </options>
+          </constraints>
+          <control type="list" format="string">
+            <heading>30080</heading>
+          </control>
+        </setting>
+        <setting id="ir_code_oppo" type="string" label="30085">
+          <level>0</level>
+          <default></default>
+          <control type="edit" format="string">
+            <heading>30085</heading>
+          </control>
+        </setting>
+        <setting id="ir_code_kodi" type="string" label="30086">
+          <level>0</level>
+          <default></default>
+          <control type="edit" format="string">
+            <heading>30086</heading>
+          </control>
+        </setting>
+        <setting id="ir_lirc_device" type="string" label="30087">
+          <level>0</level>
+          <default>/dev/lirc0</default>
+          <control type="edit" format="string">
+            <heading>30087</heading>
+          </control>
+        </setting>
+        <setting id="ir_serial_port" type="string" label="30088">
+          <level>0</level>
+          <default>/dev/ttyUSB0</default>
+          <control type="edit" format="string">
+            <heading>30088</heading>
+          </control>
+        </setting>
+        <setting id="ir_serial_baud" type="integer" label="30089">
+          <level>0</level>
+          <default>9600</default>
+          <control type="edit" format="integer">
+            <heading>30089</heading>
+          </control>
+        </setting>
       </group>
     </category>
     <category id="serial" label="30050">

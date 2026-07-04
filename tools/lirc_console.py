@@ -142,6 +142,7 @@ if _TK_OK:
             row = ttk.Frame(dev)
             row.pack(fill="x", padx=6, pady=4)
             ttk.Button(row, text="↻ Refresh", command=self._refresh).pack(side="left")
+            ttk.Button(row, text="Prepare this Pi…", command=self._prepare_pi).pack(side="left", padx=(4, 0))
             ttk.Label(row, text="TX").pack(side="left", padx=(10, 2))
             self.tx_var = tk.StringVar()
             self.tx_box = ttk.Combobox(row, textvariable=self.tx_var, width=16, state="readonly")
@@ -207,6 +208,19 @@ if _TK_OK:
                     self.tx_var.set(self.ctl.tx.path)
                 if self.ctl.rx:
                     self.rx_var.set(self.ctl.rx.path)
+
+            self._guard(do)
+
+        def _prepare_pi(self):
+            def do():
+                import setup_rpi4_lirc as prov
+
+                plan = prov.build_plan()
+                self._log_pane.log("Prepare-this-Pi plan (dry-run):")
+                self._log_pane.log("  config.txt: {}".format(plan["config_path"] or "(none found)"))
+                self._log_pane.log("  install v4l-utils: {}".format(plan["install_v4l_utils"]))
+                self._log_pane.log("  overlays to add: {}".format(", ".join(plan["overlays_to_add"]) or "(none)"))
+                self._log_pane.log("  -> to apply: sudo python3 tools/setup_rpi4_lirc.py --apply")
 
             self._guard(do)
 
