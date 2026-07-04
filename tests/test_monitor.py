@@ -59,8 +59,47 @@ def test_watch_playback_gives_up_if_never_starts(monkeypatch):
         def playback_state(self):
             raise AssertionError("phase 2 must not run if playback never started")
 
-    cfg = Config(oppo_ip="x", poll_interval=2, idle_confirmations=2)  # grace = max(2, 10) = 10 polls
+    cfg = Config(oppo_ip="x", poll_interval=2, idle_confirmations=2)  # ~90s grace; no on_stall -> give up
     assert monitor.watch_playback(cfg, Never()) is False
+
+
+def test_watch_playback_auto_heals_then_plays(monkeypatch):
+    # #21: playback stalls past the grace -> re-issue the play ONCE (on_stall); then it starts.
+    monkeypatch.setattr(monitor, "interruptible_sleep", lambda *a, **k: None)
+    state = {"healed": False, "heals": 0}
+
+    class C:
+        def is_playing(self):
+            return state["healed"]  # only starts playing after the heal fires
+
+        def playback_state(self):
+            return "idle"  # phase 2: immediate confirmed idle
+
+    def heal():
+        state["heals"] += 1
+        state["healed"] = True
+
+    cfg = Config(oppo_ip="x", poll_interval=2, idle_confirmations=1, playback_start_grace_seconds=4)
+    assert monitor.watch_playback(cfg, C(), on_stall=heal) is True
+    assert state["heals"] == 1
+
+
+def test_watch_playback_heals_only_once_then_gives_up(monkeypatch):
+    # #21: the auto-heal is bounded -- exactly ONE re-issue, then give up if still not playing.
+    monkeypatch.setattr(monitor, "interruptible_sleep", lambda *a, **k: None)
+    heals = {"n": 0}
+
+    class Never:
+        def is_playing(self):
+            return False
+
+        def playback_state(self):
+            raise AssertionError("phase 2 must not run if playback never started")
+
+    cfg = Config(oppo_ip="x", poll_interval=2, idle_confirmations=1, playback_start_grace_seconds=4)
+    result = monitor.watch_playback(cfg, Never(), on_stall=lambda: heals.__setitem__("n", heals["n"] + 1))
+    assert result is False
+    assert heals["n"] == 1
 
 
 def test_watch_playback_aborts(monkeypatch):

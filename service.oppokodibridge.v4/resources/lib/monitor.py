@@ -28,20 +28,37 @@ def interruptible_sleep(seconds: float, should_abort) -> None:
         waited += step
 
 
-def watch_playback(config, client, should_abort=None) -> bool:
-    """Block until the OPPO stops playing. Returns True if playback was observed at all."""
+def watch_playback(config, client, should_abort=None, on_stall=None) -> bool:
+    """Block until the OPPO stops playing. Returns True if playback was observed at all.
+
+    Phase 1 waits ~``playback_start_grace_seconds`` (reference ISO patience, #21) for playback to
+    start. If it stalls and ``on_stall`` is given, it re-issues the play ONCE (ISO auto-heal) and waits
+    one more grace window before giving up -- ``on_stall`` is best-effort and never crashes the watch."""
     if should_abort is None:
         should_abort = lambda: False
 
     interval = max(2.0, float(config.poll_interval))
-    grace = max(int(config.idle_confirmations), 10)  # NFS mount + buffer can be slow to start
+    grace_secs = float(getattr(config, "playback_start_grace_seconds", 90.0))
+    grace = max(int(config.idle_confirmations), int(grace_secs / interval) or 1)  # ~90s of patience
     interruptible_sleep(interval, should_abort)
     idle = 0
+    healed = False
     while not should_abort():
         if client.is_playing():
             break
         idle += 1
         if idle >= grace:
+            if on_stall is not None and not healed:
+                healed = True
+                log("OPPO not playing after ~{:.0f}s; re-issuing playback once (ISO auto-heal).".format(
+                    idle * interval))
+                try:
+                    on_stall()
+                except Exception as exc:  # noqa: BLE001 -- heal is best-effort, must not crash the watch
+                    log("auto-heal re-issue failed (non-fatal): {}".format(exc))
+                idle = 0
+                interruptible_sleep(interval, should_abort)
+                continue
             log("OPPO never reported playback after {} HTTP polls; giving up.".format(idle))
             return False
         interruptible_sleep(interval, should_abort)

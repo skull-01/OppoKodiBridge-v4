@@ -15,7 +15,7 @@ class Config:
     oppo_http_port: int = 436
     oppo_model: str = "M9205"
     oppo_http_broadcast: str = "255.255.255.255"
-    socket_timeout: float = 4.0
+    socket_timeout: float = 8.0
     handoff_enabled: bool = True
     disc_iso_only: bool = True
     use_json_payload: bool = True
@@ -35,6 +35,11 @@ class Config:
     idle_confirmations: int = 2
     max_read_failures: int = 5
     max_watch_seconds: float = 21600.0
+    # Reference ISO patience (#21): wait ~90s for playback to start before giving up (large UHD ISOs
+    # buffer slowly), and auto-heal once (re-issue the play) if it stalls. Internal tunables.
+    playback_start_grace_seconds: float = 90.0
+    # Bounded transient-retry for idempotent OPPO reads on a slow/fragile proxy (#22). Internal.
+    http_retries: int = 1
     kodi_rpc_port: int = 8080
     kodi_rpc_user: str = ""
     kodi_rpc_pass: str = ""

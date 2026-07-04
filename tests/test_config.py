@@ -100,7 +100,7 @@ def test_from_addon_ignores_removed_tuning_settings(monkeypatch):
     )
     cfg = config_mod.from_addon()
     assert cfg.poll_interval == 5.0       # dataclass default, NOT the stray 99
-    assert cfg.socket_timeout == 4.0      # dataclass default, NOT the stray 25
+    assert cfg.socket_timeout == 8.0      # dataclass default (raised for slow-proxy tolerance, #22)
     assert cfg.kodi_rpc_port == 9090      # Kodi JSON-RPC settings are still read
 
 

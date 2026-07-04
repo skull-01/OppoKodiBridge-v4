@@ -48,7 +48,12 @@ def run(config, kodi_file: str, should_abort=None) -> bool:
     try:
         if not handoff.play(config, client, kodi_file, should_abort):
             return False
-        started = monitor.watch_playback(config, client, should_abort)
+        # ISO auto-heal (#21): if the OPPO never reports playback within the grace window, re-issue the
+        # play ONCE. handoff.play is idempotent (re-wake / bounded re-mount / re-play).
+        started = monitor.watch_playback(
+            config, client, should_abort,
+            on_stall=lambda: handoff.play(config, client, kodi_file, should_abort),
+        )
     finally:
         # stop-side: reclaim the TV for Kodi -- ONCE, now that the handoff has ended (success OR
         # failure). Single-shot; never a standing re-asserter.
