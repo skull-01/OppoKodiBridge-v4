@@ -1,0 +1,69 @@
+<svg width="816" height="564" viewBox="0 0 680 470" role="img" xmlns="http://www.w3.org/2000/svg">
+  <title>Physical connection map from a Raspberry Pi 4 GPIO header to a transistor-driven IR LED</title>
+  <desc>The Pi 4 40-pin header is drawn as two rows of pins. Pin 4 (5V, red) feeds an IR LED; its cathode goes through a 68 ohm resistor to a 2N2222 transistor collector. Pin 12 (GPIO18, blue) drives the base through a 1k resistor. Pin 6 (GND) returns from the emitter.</desc>
+  <style>
+    text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  </style>
+  <rect x="0" y="0" width="680" height="470" rx="14" fill="#ffffff" stroke="#e5e3dd" stroke-width="1"/>
+
+  <text x="340" y="50" text-anchor="middle" font-size="16" font-weight="600" fill="#1c1917">Connection map &#8212; Raspberry Pi 4 header &#8594; IR LED</text>
+  <text x="340" y="72" text-anchor="middle" font-size="12" fill="#6b6760">Only 3 pins used &#183; all on the even (bottom) row</text>
+
+  <rect x="48" y="98" width="584" height="90" rx="9" fill="#faf8f4" stroke="#d8d4cc" stroke-width="1.5"/>
+  <text x="60" y="90" class="mono" font-size="10" fill="#8a857c">GPIO header &#8212; top view &#183; &#9642; = pin 1</text>
+  <rect x="69" y="119" width="10" height="10" fill="#ffffff" stroke="#b8b3aa" stroke-width="1.4"/>
+
+  <g fill="#ffffff" stroke="#d8d4cc" stroke-width="1.2">
+    <circle cx="102" cy="124" r="5"/><circle cx="130" cy="124" r="5"/><circle cx="158" cy="124" r="5"/><circle cx="186" cy="124" r="5"/><circle cx="214" cy="124" r="5"/><circle cx="242" cy="124" r="5"/><circle cx="270" cy="124" r="5"/><circle cx="298" cy="124" r="5"/><circle cx="326" cy="124" r="5"/><circle cx="354" cy="124" r="5"/><circle cx="382" cy="124" r="5"/><circle cx="410" cy="124" r="5"/><circle cx="438" cy="124" r="5"/><circle cx="466" cy="124" r="5"/><circle cx="494" cy="124" r="5"/><circle cx="522" cy="124" r="5"/><circle cx="550" cy="124" r="5"/><circle cx="578" cy="124" r="5"/><circle cx="606" cy="124" r="5"/>
+    <circle cx="158" cy="156" r="5"/><circle cx="186" cy="156" r="5"/><circle cx="242" cy="156" r="5"/><circle cx="270" cy="156" r="5"/><circle cx="298" cy="156" r="5"/><circle cx="326" cy="156" r="5"/><circle cx="354" cy="156" r="5"/><circle cx="382" cy="156" r="5"/><circle cx="410" cy="156" r="5"/><circle cx="438" cy="156" r="5"/><circle cx="466" cy="156" r="5"/><circle cx="494" cy="156" r="5"/><circle cx="522" cy="156" r="5"/><circle cx="550" cy="156" r="5"/><circle cx="578" cy="156" r="5"/><circle cx="606" cy="156" r="5"/>
+  </g>
+
+  <circle cx="102" cy="156" r="8" fill="#e8633a" stroke="#ffffff" stroke-width="1.5"/>
+  <circle cx="130" cy="156" r="8" fill="#292524" stroke="#ffffff" stroke-width="1.5"/>
+  <circle cx="214" cy="156" r="8" fill="#3b7ff5" stroke="#ffffff" stroke-width="1.5"/>
+  <text x="102" y="180" text-anchor="middle" class="mono" font-size="10" fill="#8a857c">4</text>
+  <text x="130" y="180" text-anchor="middle" class="mono" font-size="10" fill="#8a857c">6</text>
+  <text x="214" y="180" text-anchor="middle" class="mono" font-size="10" fill="#8a857c">12</text>
+
+  <path d="M102,156 V250 H124 Q130,243 136,250 H208 Q214,243 220,250 H430 V262" fill="none" stroke="#e8633a" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="88" y="232" text-anchor="end" font-size="11" fill="#b23c14">5 V</text>
+
+  <path d="M214,156 V372 H360" fill="none" stroke="#3b7ff5" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M405,372 H416" fill="none" stroke="#3b7ff5" stroke-width="2.6" stroke-linecap="round"/>
+  <text x="224" y="356" font-size="11" fill="#1b4fb3">GPIO18</text>
+
+  <path d="M430,398 V414 H130 V156" fill="none" stroke="#292524" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="120" y="300" text-anchor="end" font-size="11" fill="#292524">GND</text>
+
+  <polygon points="418,262 442,262 430,286" fill="#ffffff" stroke="#292524" stroke-width="2"/>
+  <line x1="416" y1="286" x2="444" y2="286" stroke="#292524" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M430,286 V298" fill="none" stroke="#292524" stroke-width="2.4"/>
+  <g stroke="#8a857c" stroke-width="1.6" stroke-linecap="round">
+    <line x1="446" y1="270" x2="459" y2="257"/><line x1="452" y1="276" x2="465" y2="263"/>
+  </g>
+  <polygon points="459,257 454,258 458,262" fill="#8a857c"/>
+  <polygon points="465,263 460,264 464,268" fill="#8a857c"/>
+  <text x="452" y="280" font-size="11" fill="#292524">IR LED &#183; 940 nm</text>
+
+  <rect x="420" y="298" width="20" height="42" fill="#ffffff" stroke="#292524" stroke-width="2"/>
+  <text x="452" y="323" font-size="11" fill="#292524">R2 &#183; 68 &#937;</text>
+  <path d="M430,340 V346" fill="none" stroke="#292524" stroke-width="2.4"/>
+
+  <rect x="360" y="362" width="45" height="20" fill="#ffffff" stroke="#3b7ff5" stroke-width="2"/>
+  <text x="382" y="356" text-anchor="middle" font-size="10" fill="#292524">R1 &#183; 1 k&#937;</text>
+
+  <circle cx="430" cy="372" r="26" fill="#faf8f4" stroke="#292524" stroke-width="2"/>
+  <line x1="416" y1="356" x2="416" y2="388" stroke="#292524" stroke-width="2.4"/>
+  <path d="M416,360 L430,347" fill="none" stroke="#292524" stroke-width="2.2"/>
+  <path d="M416,384 L430,398" fill="none" stroke="#292524" stroke-width="2.2"/>
+  <polygon points="430,398 423,395 428,390" fill="#292524"/>
+  <text x="462" y="378" font-size="11" fill="#292524">Q1 &#183; 2N2222</text>
+  <text x="436" y="344" class="mono" font-size="9" fill="#8a857c">C</text>
+  <text x="400" y="366" class="mono" font-size="9" fill="#8a857c">B</text>
+  <text x="436" y="406" class="mono" font-size="9" fill="#8a857c">E</text>
+
+  <circle cx="60" cy="445" r="6" fill="#e8633a"/><text x="72" y="449" font-size="11" fill="#6b6760">+5 V (pin 4)</text>
+  <circle cx="200" cy="445" r="6" fill="#292524"/><text x="212" y="449" font-size="11" fill="#6b6760">GND (pin 6)</text>
+  <circle cx="330" cy="445" r="6" fill="#3b7ff5"/><text x="342" y="449" font-size="11" fill="#6b6760">GPIO18 signal (pin 12)</text>
+</svg>

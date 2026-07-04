@@ -1,0 +1,71 @@
+<svg width="816" height="552" viewBox="0 0 680 460" role="img" xmlns="http://www.w3.org/2000/svg">
+  <title>IR blaster schematic — 2N2222 driving an IR LED from Raspberry Pi 4 GPIO18</title>
+  <desc>Raspberry Pi 4 pin 4 (5V) feeds an IR LED, whose cathode goes through a 68 ohm resistor to the collector of a 2N2222 NPN transistor. GPIO18 (pin 12) drives the transistor base through a 1k ohm resistor. The emitter returns to pin 6 (GND).</desc>
+  <style>
+    text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  </style>
+  <rect x="0" y="0" width="680" height="460" rx="14" fill="#ffffff" stroke="#e5e3dd" stroke-width="1"/>
+
+  <text x="340" y="58" text-anchor="middle" font-size="16" font-weight="600" fill="#1c1917">DIY IR blaster &#8594; Raspberry Pi 4</text>
+  <text x="340" y="80" text-anchor="middle" font-size="12" fill="#6b6760">GPIO18 / PWM0 (physical pin 12) &#183; low-side NPN LED driver</text>
+
+  <text x="131" y="104" text-anchor="middle" font-size="13" font-weight="600" fill="#1c1917">Raspberry Pi 4</text>
+  <rect x="56" y="112" width="150" height="250" rx="10" fill="#faf8f4" stroke="#d8d4cc" stroke-width="1.5"/>
+  <text x="131" y="134" text-anchor="middle" class="mono" font-size="10" fill="#8a857c">40-pin header</text>
+  <text x="72" y="169" font-size="12" fill="#292524">Pin 4 &#183; 5V</text>
+  <text x="72" y="244" font-size="12" fill="#1b4fb3">Pin 12 &#183; GPIO18</text>
+  <text x="72" y="319" font-size="12" fill="#292524">Pin 6 &#183; GND</text>
+
+  <g fill="none" stroke="#292524" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M206,165 H470"/>
+    <path d="M470,165 V178"/>
+    <path d="M470,202 V232"/>
+    <path d="M470,276 V300"/>
+    <path d="M455,314 L470,300"/>
+    <path d="M455,338 L470,352"/>
+    <path d="M470,352 V398"/>
+    <path d="M470,398 H250 V315 H206"/>
+    <path d="M455,310 V342"/>
+  </g>
+
+  <g fill="none" stroke="#3b7ff5" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M206,240 H300 V326 H332"/>
+    <path d="M410,326 H455"/>
+  </g>
+
+  <polygon points="458,178 482,178 470,202" fill="#ffffff" stroke="#292524" stroke-width="2"/>
+  <line x1="456" y1="202" x2="484" y2="202" stroke="#292524" stroke-width="2.4" stroke-linecap="round"/>
+  <g stroke="#8a857c" stroke-width="1.6" stroke-linecap="round">
+    <line x1="486" y1="187" x2="499" y2="174"/>
+    <line x1="492" y1="193" x2="505" y2="180"/>
+  </g>
+  <polygon points="499,174 494,175 498,179" fill="#8a857c"/>
+  <polygon points="505,180 500,181 504,185" fill="#8a857c"/>
+  <text x="498" y="198" font-size="12" fill="#292524">IR LED &#183; 940 nm</text>
+
+  <rect x="460" y="232" width="20" height="44" fill="#ffffff" stroke="#292524" stroke-width="2"/>
+  <text x="492" y="258" font-size="12" fill="#292524">R2 &#183; 68 &#937;</text>
+
+  <rect x="332" y="316" width="78" height="20" fill="#ffffff" stroke="#3b7ff5" stroke-width="2"/>
+  <text x="371" y="309" text-anchor="middle" font-size="11" fill="#292524">R1 &#183; 1 k&#937;</text>
+
+  <circle cx="470" cy="326" r="28" fill="#faf8f4" stroke="#292524" stroke-width="2"/>
+  <polygon points="470,352 463,349 468,344" fill="#292524"/>
+  <text x="508" y="330" font-size="12" fill="#292524">Q1 &#183; 2N2222 (NPN)</text>
+  <text x="478" y="299" class="mono" font-size="10" fill="#8a857c">C</text>
+  <text x="435" y="317" class="mono" font-size="10" fill="#8a857c">B</text>
+  <text x="478" y="356" class="mono" font-size="10" fill="#8a857c">E</text>
+
+  <text x="330" y="158" font-size="11" fill="#6b6760">+5 V</text>
+  <text x="352" y="392" font-size="11" fill="#6b6760">GND</text>
+
+  <circle cx="206" cy="165" r="5" fill="#292524"/>
+  <circle cx="206" cy="240" r="5" fill="#3b7ff5"/>
+  <circle cx="206" cy="315" r="5" fill="#292524"/>
+
+  <line x1="56" y1="426" x2="86" y2="426" stroke="#3b7ff5" stroke-width="3" stroke-linecap="round"/>
+  <text x="92" y="430" font-size="11" fill="#6b6760">GPIO control signal</text>
+  <line x1="250" y1="426" x2="280" y2="426" stroke="#292524" stroke-width="3" stroke-linecap="round"/>
+  <text x="286" y="430" font-size="11" fill="#6b6760">+5 V / GND (power)</text>
+</svg>
