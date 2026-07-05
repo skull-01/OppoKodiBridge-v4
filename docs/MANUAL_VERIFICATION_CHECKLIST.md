@@ -152,7 +152,7 @@ design decision, intentionally **not** built.
 
 Off-box suite: **277 passed**. Built under Protocol 1; independent adversarial re-audit (8-agent + verify) —
 all fixes correct, no regressions. Shipped add-on: #33 (HIGH), #34 (guard only — byte-order deferred), #35.
-Dev tools: #36–#40. All implemented in `0619b70`. No release (held); tool bundles refreshed at promote time.
+Dev tools: #36–#40. All implemented in `0619b70`. **Released in [v4.3.1](https://github.com/skull-01/OppoKodiBridge-v4/releases/tag/v4.3.1)** (tag `v4.3.1` @ `68e2e38`); add-on zip + the two refreshed IR tool bundles (windows-zjiot / rpi4-lirc) attached.
 
 | # | Issue / SHA | Check | What you should see |
 |---|-------------|-------|---------------------|
