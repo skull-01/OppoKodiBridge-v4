@@ -121,3 +121,27 @@ byte-for-byte identical). The IR transports ship **default-off** and are **softw
 | 26 | [#23](https://github.com/skull-01/OppoKodiBridge-v4/issues/23)/[#26](https://github.com/skull-01/OppoKodiBridge-v4/issues/26) `94ef41a` | **lirc (needs RPi4 host + wired IR):** set `tv_switch_method=lirc` + `ir_code_oppo`/`ir_code_kodi` (captured via `tools/lirc_console.py`), `ir_lirc_device`. Play then stop. | TV switches to the OPPO on play and back to Kodi on stop via `ir-ctl` — no OPPO power-cycle. |
 | 27 | [#26](https://github.com/skull-01/OppoKodiBridge-v4/issues/26) `94ef41a` | **ir (needs Ugoos host + ZJIoT module):** set `tv_switch_method=ir` + `ir_serial_port` + codes. Play/stop. | TV switches via the serial IR module. ⚠️ Confirm the ZJIoT wire format on real hardware (the codec carries a "confirm-on-hardware" warning). |
 | 28 | [#27](https://github.com/skull-01/OppoKodiBridge-v4/issues/27) `94ef41a` | **Provisioner (needs a Pi):** `python3 tools/setup_rpi4_lirc.py` (dry-run), then `sudo … --apply`. Re-run `--apply`. | Dry-run prints the plan and writes nothing; `--apply` installs v4l-utils + adds the overlay to the correct `config.txt` (a `.okb-bak` backup is made) and reports a reboot is needed; the re-run is a no-op (idempotent). |
+
+---
+
+## detect-cluster + sweep fixes — branch `feat/detect-cluster` (#10–#16, #28–#31)
+
+Off-box suite: **262 passed**. Built proxy-unblocked; two independent adversarial audit rounds (11-agent +
+4-agent re-audit) — a HIGH termination regression (#30) and a MED share-root parser false-positive were
+caught and fixed; remaining items are LOW/contained + documented. **Default `cec`/`nfs1`/typed-path
+behaviour is unchanged (zero regression).** Detection is **software-verified only** — the OPPO checks need
+the box + the (now-restored) proxy. All rows implemented in `16c3cb1`. #32 (orchestrator early-switch) is a
+design decision, intentionally **not** built.
+
+| # | Issue / SHA | Check | What you should see |
+|---|-------------|-------|---------------------|
+| 29 | [#16](https://github.com/skull-01/OppoKodiBridge-v4/issues/16) `16c3cb1` | **path_from auto-detect (nested sources):** leave `path_from` blank with two overlapping Kodi video sources (a broad share + a nested sub-source); play a disc under the nested one. | Mounts under the FULL sub-path (anchored at the broad share root), not the truncated deep-source path. A typed `path_from` still wins, untouched. |
+| 30 | [#11](https://github.com/skull-01/OppoKodiBridge-v4/issues/11) `16c3cb1` | **path_to auto-detect:** blank `path_to`, then play a disc. | The add-on parses the OPPO NFS share list for the export root and mounts under it (log: "path_to auto-detected …"). A TYPED path_to is never overridden. ⚠️ Best-effort — confirm the detected root matches your real export. |
+| 31 | [#14](https://github.com/skull-01/OppoKodiBridge-v4/issues/14) `16c3cb1` | **Mount override / no-regression:** leave `oppo_mount` = `nfs1` (default) and play a disc; then set a custom value if your OPPO mounts elsewhere. | Default plays byte-identical `/mnt/nfs1/<leaf>`; a custom value changes the mount dir to `/mnt/<value>/…`. |
+| 32 | [#10](https://github.com/skull-01/OppoKodiBridge-v4/issues/10) `16c3cb1` | **Detect-from-Kodi button:** Settings → NAS path mapping → "Detect the Kodi path prefix …". | Lists your Kodi video sources; picking one writes it to `path_from`. Empty sources → a friendly "add a source first" message. |
+| 33 | [#12](https://github.com/skull-01/OppoKodiBridge-v4/issues/12) `16c3cb1` | **ISO capability check:** Settings → Setup & tests → "ISO playback check"; start an ISO on the OPPO, confirm. | Wakes the OPPO, then reports the playback flags it raised. If nothing plays it says so (also honours a status-only PLAY token). |
+| 34 | [#13](https://github.com/skull-01/OppoKodiBridge-v4/issues/13) `16c3cb1` | **BDMV capability check:** "BDMV playback check"; start a Blu-ray folder on the OPPO, confirm. | Same as #33 for a BDMV disc — reports all raised flags (doesn't gate on `is_bdmv_playing` alone). |
+| 35 | [#29](https://github.com/skull-01/OppoKodiBridge-v4/issues/29) `16c3cb1` | **Ping wakes the OPPO:** put the OPPO in standby (:436 asleep), then Settings → "Ping the OPPO". | HTTP API reports **OK** (the ping now OREMOTE-wakes first) instead of a false UNREACHABLE. |
+| 36 | [#28](https://github.com/skull-01/OppoKodiBridge-v4/issues/28) `16c3cb1` | **Give-up STOP (observational):** if a handoff ever gives up (slow/never-starting ISO), watch the OPPO. | The OPPO isn't left playing to itself after Kodi reclaims the TV. No STOP is sent on an unmappable-file abort. |
+| 37 | [#30](https://github.com/skull-01/OppoKodiBridge-v4/issues/30) `16c3cb1` | **Pause tolerance:** pause a disc on the OPPO for a long time. | The TV isn't reclaimed out from under the pause at the ~6h mark (pause has its own budget; the watch still terminates, bounded ~2×). |
+| 38 | [#31](https://github.com/skull-01/OppoKodiBridge-v4/issues/31) `16c3cb1` | **Wizard IP display:** run the wizard, pick M9207 but type the M9205 default IP (`192.168.10.10`) with the OPPO off. | The "cannot reach" dialog names the **resolved** `192.168.10.228` (actually pinged), not the typed `.10`. |

@@ -18,6 +18,7 @@ from .oppo_http import (
     nfs_server_from_devices,
     oppo_mount_folder,
     parse_media_path,
+    parse_nfs_share_root,
     reply_succeeded,
     split_share_relative,
 )
@@ -42,7 +43,8 @@ def play(config, client, kodi_file: str, should_abort=None) -> bool:
     # SAME depth, so a correctly-typed path_from is AUTHORITATIVE: use it whenever it maps the file --
     # never override it (a detected root at a different depth would mis-anchor path_to and mis-mount).
     # Only when the typed path_from does NOT map (blank or stale) do we consult Kodi's OWN configured
-    # sources and re-derive path_from (longest-prefix). Kodi-side only -- no OPPO contact, best-effort.
+    # sources and re-derive path_from (SHALLOWEST source -- anchors at the same share-root depth as
+    # path_to; see detect_path_from, #16). Kodi-side only -- no OPPO contact, best-effort.
     target = kodi_file.rstrip("/")
     path_from = config.path_from
     folder, basename = split_share_relative(target, path_from)
@@ -87,11 +89,20 @@ def play(config, client, kodi_file: str, should_abort=None) -> bool:
         server = parse_media_path(kodi_file)[0]
 
     _best_effort(lambda: client.login_nfs(server), "login")
-    _best_effort(client.get_nfs_share_list, "share list")
+    share_list = _best_effort(client.get_nfs_share_list, "share list")
     interruptible_sleep(2.0, should_abort)
     _best_effort(client.get_setup_menu, "setup")
 
-    mount_folder = oppo_mount_folder(mount_rel, config.path_to)
+    # path_to is the OPPO export root. It is AUTHORITATIVE when typed (never overridden); only when it is
+    # left blank do we auto-detect it from the OPPO's own NFS share list (#11). Detection is best-effort
+    # -- a blank path_to that stays undetected just mounts the in-share folder at the export root.
+    path_to = config.path_to
+    if not (path_to or "").strip():
+        detected_to = parse_nfs_share_root(share_list)
+        if detected_to:
+            log("path_to auto-detected from OPPO NFS share list: {!r} (path_to was blank)".format(detected_to))
+            path_to = detected_to
+    mount_folder = oppo_mount_folder(mount_rel, path_to)
     log("Handoff: server={} disc={} mount={!r} play={!r}".format(server, is_disc, mount_folder, play_name))
     # Mount the file's folder -- reference-faithful (skull-01/emby-chinoppo-bridge-ri playback.py):
     # at most TWO attempts, a fresh login (NEVER an unmount) between them, and ABORT before play if both

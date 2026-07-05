@@ -24,6 +24,10 @@ class Config:
     path_from: str = ""
     path_to: str = ""
     path_from_autodetect: bool = True
+    # OPPO mount directory under /mnt (the play path is /mnt/<oppo_mount>/<leaf>). The real mount point
+    # can't be read back from the app API (#14), so it's a configurable override; default nfs1 keeps the
+    # proven /mnt/nfs1 path unchanged.
+    oppo_mount: str = "nfs1"
     cec_auto_enable: bool = True
     cec_reclaim_on_stop: bool = True
     grab_tv_on_play: bool = True
@@ -129,6 +133,7 @@ def from_addon() -> "Config":
         path_from=s("path_from").strip(),
         path_to=s("path_to").strip(),
         path_from_autodetect=b("path_from_autodetect", True),
+        oppo_mount=(s("oppo_mount", "nfs1").strip() or "nfs1"),
         cec_auto_enable=b("cec_auto_enable", True),
         cec_reclaim_on_stop=b("cec_reclaim_on_stop", True),
         grab_tv_on_play=b("grab_tv_on_play", True),

@@ -283,15 +283,16 @@ def test_play_autodetects_when_typed_path_from_does_not_match(monkeypatch):
     assert ("play_file", "clip.mp4") in client.calls
 
 
-def test_play_longest_prefix_source_selected_end_to_end(monkeypatch):
-    # Blank typed -> detection; with nested sources the LONGEST-prefix (deepest) root is chosen, so the
-    # in-share folder is relative to it. Pins longest-prefix selection through the real handoff wiring.
+def test_play_shallowest_prefix_source_selected_end_to_end(monkeypatch):
+    # #16: blank typed -> detection; with nested sources the SHALLOWEST (broadest) root is chosen so the
+    # full in-share sub-path is preserved and path_to (the export root) anchors correctly. The deep root
+    # would have dropped 'Movies' and mis-mounted at the path_to root.
     monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
     monkeypatch.setattr(handoff.cec, "kodi_video_sources",
                         lambda cfg: ["nfs://h/share", "nfs://h/share/Movies"])
     client = _RecordingClient()
     assert handoff.play(_cfg_auto(path_to="srv"), client, "nfs://h/share/Movies/Dune.iso") is True
-    assert ("mount", "srv") in client.calls            # deepest root -> empty in-share folder -> path_to root
+    assert ("mount", "srv/Movies") in client.calls     # shallow root keeps 'Movies' -> correct anchor
     assert ("play_file", "Dune.iso") in client.calls
 
 
@@ -425,3 +426,44 @@ def test_play_aborts_when_play_reply_is_empty(monkeypatch):
     monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
     client = _MountClient([{"success": True}], play_reply={})
     assert handoff.play(_cfg_mount(), client, "nfs://h/s/Movies/x.iso") is False
+
+
+# --- #11: auto-detect path_to from the OPPO's NFS share list (detect-as-FALLBACK for a blank path_to) --
+
+class _ShareListClient(_RecordingClient):
+    """Records mount calls and serves a /getNfsShareFolderlist blob for the path_to auto-detect."""
+
+    def __init__(self, share_blob, play_reply=None):
+        super().__init__(play_reply)
+        self._blob = share_blob
+
+    def get_nfs_share_list(self):
+        return self._blob
+
+
+def test_play_autodetects_path_to_from_share_list_when_blank(monkeypatch):
+    # path_to left blank -> parse the OPPO's own NFS share list for the export root and mount under it.
+    monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
+    client = _ShareListClient("\r\x00\x00\x00srv/nfs/media\x01")
+    cfg = Config(oppo_ip="x", path_from="nfs://h/s", path_to="", path_from_autodetect=False)
+    assert handoff.play(cfg, client, "nfs://h/s/Movies/Dune.iso") is True
+    assert ("mount", "srv/nfs/media/Movies") in client.calls
+
+
+def test_play_typed_path_to_is_never_overridden_by_share_list(monkeypatch):
+    # the typed path_to is AUTHORITATIVE -- detection only fills a BLANK one, never overrides a typed one.
+    monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
+    client = _ShareListClient("\r\x00\x00\x00OTHER/export/root\x01")
+    cfg = Config(oppo_ip="x", path_from="nfs://h/s", path_to="srv", path_from_autodetect=False)
+    assert handoff.play(cfg, client, "nfs://h/s/Movies/Dune.iso") is True
+    assert ("mount", "srv/Movies") in client.calls   # typed 'srv', NOT the parsed 'OTHER/export/root'
+
+
+def test_play_blank_path_to_undetected_mounts_in_share_folder(monkeypatch):
+    # path_to blank AND the share list yields nothing path-like -> unchanged behaviour (mount just the
+    # in-share folder, base empty).
+    monkeypatch.setattr(handoff, "interruptible_sleep", lambda *a, **k: None)
+    client = _ShareListClient("\x00\x01\x02")
+    cfg = Config(oppo_ip="x", path_from="nfs://h/s", path_to="", path_from_autodetect=False)
+    assert handoff.play(cfg, client, "nfs://h/s/Movies/Dune.iso") is True
+    assert ("mount", "Movies") in client.calls

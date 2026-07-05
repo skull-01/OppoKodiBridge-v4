@@ -78,15 +78,32 @@ def _http_watch_until_idle(config, client, should_abort) -> None:
     can't trigger a premature reclaim mid-playback. To guarantee this loop always returns -- so the
     orchestrator's finally still reclaims the TV and the external-player process can never hang -- it
     also gives up after a run of unreadable polls (the OPPO went away) and after an absolute
-    watch-time ceiling (a stuck 'still playing' flag that never clears).
+    watch-time ceiling (a stuck 'still playing' flag that never clears). A paused disc is exempt from the
+    playing ceiling (#30) but has its own equal, monotonic paused budget, so the absolute bound on the
+    loop is ~2*max_watch_seconds (playing + paused each capped) -- still guaranteed to terminate.
     """
     interval = max(2.0, float(config.poll_interval))
     needed = max(1, int(config.idle_confirmations))
     max_unknown = max(needed, int(config.max_read_failures))
     max_polls = max(1, int(float(config.max_watch_seconds) / interval))
-    idle = unknown = polls = 0
+    idle = unknown = polls = paused = 0
     while not should_abort():
         state = client.playback_state()
+        if state == "paused":
+            # #30: a paused disc is alive but not progressing. Don't advance the main watch ceiling on it
+            # -- that would reclaim the TV out from under a long pause -- give pause its OWN budget. The
+            # paused counter is MONOTONIC (never reset by a non-paused read): if it reset, an interleaved
+            # playing<->paused stream could clear it every cycle while `polls` crept up only 1/cycle,
+            # letting the loop run ~max_polls^2 reads and starve BOTH ceilings. Monotonic paused + never-
+            # reset polls => every read advances exactly one counter, so the loop ALWAYS ends within
+            # polls + paused <= 2*max_polls reads (playing and paused each bounded by max_watch_seconds).
+            idle = unknown = 0
+            paused += 1
+            if paused >= max_polls:
+                log("OPPO paused for the full watch ceiling; ending so the TV is reclaimed.")
+                return
+            interruptible_sleep(interval, should_abort)
+            continue
         if state == "playing":
             idle = unknown = 0
         elif state == "idle":

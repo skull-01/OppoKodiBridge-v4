@@ -206,3 +206,19 @@ msgstr ""
 msgctxt "#30089"
 msgid "IR serial baud (ZJIoT module)"
 msgstr ""
+
+msgctxt "#30090"
+msgid "OPPO mount directory under /mnt (advanced; default nfs1)"
+msgstr ""
+
+msgctxt "#30091"
+msgid "Detect the Kodi path prefix from Kodi's sources now"
+msgstr ""
+
+msgctxt "#30092"
+msgid "ISO playback check (play an ISO on the OPPO, detect it)"
+msgstr ""
+
+msgctxt "#30093"
+msgid "BDMV playback check (play a Blu-ray folder on the OPPO, detect it)"
+msgstr ""

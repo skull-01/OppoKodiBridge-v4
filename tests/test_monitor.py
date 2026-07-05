@@ -135,3 +135,36 @@ def test_http_bounded_when_playing_flag_sticks(monkeypatch):
     cfg = Config(oppo_ip="x", poll_interval=5, idle_confirmations=2, max_watch_seconds=20)
     assert monitor.watch_playback(cfg, client) is True
     assert client.state_calls == 4  # ceil(20/5) poll ceiling, never unbounded
+
+
+def test_paused_does_not_burn_the_main_watch_ceiling(monkeypatch):
+    # #30: a pause must NOT count toward the absolute ceiling. With a 3-poll ceiling, two pauses then
+    # real playback still reaches the idle confirmations (5 reads); if pause were counted toward the main
+    # ceiling (the old behaviour -- PAUSE reads as "playing") it would have tripped at the 3rd read.
+    monkeypatch.setattr(monitor, "interruptible_sleep", lambda *a, **k: None)
+    client = _Client(plays_on=1, states=["paused", "paused", "playing", "idle", "idle"])
+    cfg = Config(oppo_ip="x", poll_interval=2, idle_confirmations=2, max_watch_seconds=6)
+    assert monitor.watch_playback(cfg, client) is True
+    assert client.state_calls == 5
+
+
+def test_paused_forever_terminates_on_its_own_bounded_budget(monkeypatch):
+    # #30: an OPPO left paused forever must still terminate (never hang the external-player process). The
+    # paused budget is bounded by the same ceiling, so the watch ends even with no idle/abort.
+    monkeypatch.setattr(monitor, "interruptible_sleep", lambda *a, **k: None)
+    client = _Client(plays_on=1, states=["paused"])
+    cfg = Config(oppo_ip="x", poll_interval=5, idle_confirmations=2, max_watch_seconds=20)
+    assert monitor.watch_playback(cfg, client) is True
+    assert client.state_calls == 4  # ceil(20/5) paused-budget ceiling, never unbounded
+
+
+def test_paused_playing_interleave_terminates_within_bound(monkeypatch):
+    # #30 regression (audit HIGH): the pathological 1-playing : (max_polls-1)-paused pattern must NOT
+    # defeat the ceiling. With a MONOTONIC paused counter the loop ends within polls+paused <= 2*max_polls
+    # reads; the pre-fix (paused reset on every playing read) ran ~max_polls^2 reads (~1080 days at
+    # defaults). max_watch=20/interval=5 -> max_polls=4; pattern = playing, paused, paused, paused, ...
+    monkeypatch.setattr(monitor, "interruptible_sleep", lambda *a, **k: None)
+    client = _Client(plays_on=1, states=(["playing"] + ["paused"] * 3) * 50)
+    cfg = Config(oppo_ip="x", poll_interval=5, idle_confirmations=2, max_watch_seconds=20)
+    assert monitor.watch_playback(cfg, client) is True
+    assert client.state_calls <= 2 * 4  # <= 2*max_polls; the pre-fix bug ran far past this (max_polls^2)

@@ -137,6 +137,19 @@ def test_from_addon_defaults_tv_switch_to_cec(monkeypatch):
     assert cfg.ir_code_oppo == "" and cfg.ir_code_kodi == ""
 
 
+def test_from_addon_oppo_mount_defaults_nfs1_and_reads_override(monkeypatch):
+    # #14: undeclared/unset -> default nfs1 (the proven /mnt/nfs1 path); a typed value is read + stripped.
+    monkeypatch.setitem(sys.modules, "xbmcaddon", _fake_xbmcaddon({"oppo_ip": "1.2.3.4"}))
+    assert config_mod.from_addon().oppo_mount == "nfs1"
+    monkeypatch.setitem(sys.modules, "xbmcaddon",
+                        _fake_xbmcaddon({"oppo_ip": "1.2.3.4", "oppo_mount": " media "}))
+    assert config_mod.from_addon().oppo_mount == "media"
+    # a blank override falls back to nfs1 (never an empty mount dir)
+    monkeypatch.setitem(sys.modules, "xbmcaddon",
+                        _fake_xbmcaddon({"oppo_ip": "1.2.3.4", "oppo_mount": "  "}))
+    assert config_mod.from_addon().oppo_mount == "nfs1"
+
+
 def test_from_addon_path_from_autodetect_defaults_true(monkeypatch):
     # undeclared/unset -> dataclass default True (auto-detect path_from from Kodi sources is on)
     monkeypatch.setitem(sys.modules, "xbmcaddon", _fake_xbmcaddon({"oppo_ip": "1.2.3.4"}))

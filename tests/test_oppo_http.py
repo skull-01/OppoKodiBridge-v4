@@ -74,10 +74,24 @@ def test_unwrap_multipath_expands_members_urldecoded():
     ]
 
 
-def test_detect_path_from_longest_prefix_wins():
+def test_detect_path_from_shallowest_prefix_wins():
+    # #16: the SHALLOWEST (broadest) matching source wins. path_to is the OPPO export ROOT, so path_from
+    # must anchor at the same share-root depth; picking the deeper per-library source would strip the
+    # 'Movies' segment and mis-anchor path_to.
     sources = ["nfs://192.168.1.177/share", "nfs://192.168.1.177/share/Movies"]
     got = oh.detect_path_from("nfs://192.168.1.177/share/Movies/Dune (2021).iso", sources)
-    assert got == "nfs://192.168.1.177/share/Movies"  # the more specific source, not the parent
+    assert got == "nfs://192.168.1.177/share"  # the broad share root, not the per-library subfolder
+
+
+def test_detect_path_from_shallowest_preserves_full_in_share_subpath():
+    # #16 made explicit via the split round-trip: the shallow root keeps the WHOLE sub-path so path_to
+    # (the export root) + sub-path maps correctly. The deep source would have dropped 'Movies'.
+    sources = ["nfs://h/share/Movies", "nfs://h/share"]  # order must not matter
+    media = "nfs://h/share/Movies/Dune/BDMV/index.bdmv"
+    root = oh.detect_path_from(media, sources)
+    assert root == "nfs://h/share"
+    folder, base = oh.split_share_relative(media, root)
+    assert folder == "Movies/Dune/BDMV" and base == "index.bdmv"
 
 
 def test_detect_path_from_strips_trailing_slash_and_feeds_split():
@@ -449,3 +463,101 @@ def test_play_bdmv_root_disc_no_trailing_slash(monkeypatch):
     monkeypatch.setattr(client, "_get_json", lambda ep, timeout=None: cap.update(ep=ep) or {})
     client.play_bdmv("")
     assert cap["ep"] == '/checkfolderhasBDMV?{"folderpath":"/mnt/nfs1"}'
+
+
+# --- #11: parse the OPPO NFS export root from /getNfsShareFolderlist ---------------------------------
+
+def test_parse_nfs_share_root_extracts_export_root():
+    # the reply decoded utf-8/errors=replace: length/control bytes bracket the export path
+    assert oh.parse_nfs_share_root("\r\x00\x00\x00srv/nfs/media\x01") == "srv/nfs/media"
+    assert oh.parse_nfs_share_root("\x0dsrv/nfs/media\x01\x08more/stuff") == "srv/nfs/media"  # first path
+    assert oh.parse_nfs_share_root("/srv/nfs/media/") == "srv/nfs/media"                       # trimmed
+
+
+def test_parse_nfs_share_root_none_when_nothing_pathlike():
+    assert oh.parse_nfs_share_root("") is None
+    assert oh.parse_nfs_share_root(None) is None
+    assert oh.parse_nfs_share_root("\x00\x01\x02") is None
+    assert oh.parse_nfs_share_root("media") is None   # a bare single segment is too ambiguous to trust
+
+
+def test_parse_nfs_share_root_rejects_non_export_bodies():
+    # #11 audit hardening: a fragile SMB->NFS proxy's HTTP/header/error/version body must NOT be mistaken
+    # for an export root. The no-space/no-colon token rule + the >=2-slash bar reject all of these.
+    for junk in ("HTTP/1.1 200 OK", "Server: nginx/1.18.0", "Content-Type: text/html",
+                 "nfs version 4.1/opt", "\x08\x00error: not/found", "a/b"):
+        assert oh.parse_nfs_share_root(junk) is None, junk
+
+
+def test_parse_nfs_share_root_skips_short_noise_before_root():
+    # a 1-slash noise token preceding the real >=2-slash export root must be skipped, not latched.
+    assert oh.parse_nfs_share_root("v1/2\x00srv/nfs/media") == "srv/nfs/media"
+
+
+def test_parse_nfs_share_root_deep_noise_before_root_is_a_known_limitation():
+    # KNOWN best-effort limitation (audit LOW, contained): a >=2-slash noise token BEFORE the real root
+    # IS latched, not skipped. Fail-safe -- a wrong path_to makes the OPPO mount fail so the handoff
+    # aborts before play (never a wrong-file play). Pinned so any future parser change is intentional.
+    assert oh.parse_nfs_share_root("a/b/c\x00srv/nfs/media") == "a/b/c"
+
+
+# --- #14: configurable OPPO mount directory (default nfs1 = zero regression) -------------------------
+
+def test_mount_dir_default_and_override():
+    assert oh.OppoClient(Config(oppo_ip="x"))._mount_dir(nfs=True) == "nfs1"       # default
+    c = oh.OppoClient(Config(oppo_ip="x", oppo_mount=""))                          # blank -> nfs/cifs pair
+    assert c._mount_dir(nfs=True) == "nfs1"
+    assert c._mount_dir(nfs=False) == "cifs1"
+    assert oh.OppoClient(Config(oppo_ip="x", oppo_mount="media"))._mount_dir() == "media"  # override
+
+
+def test_play_file_uses_configured_oppo_mount(monkeypatch):
+    client = oh.OppoClient(Config(oppo_ip="1.2.3.4", oppo_mount="media"))
+    cap = {}
+    monkeypatch.setattr(client, "_get_json", lambda ep, timeout=None: cap.update(ep=ep) or {})
+    client.play_file("192.168.10.20", "x.iso")
+    assert '"path":"/mnt/media/x.iso"' in urllib.parse.unquote(cap["ep"])
+
+
+def test_play_bdmv_uses_configured_oppo_mount(monkeypatch):
+    client = oh.OppoClient(Config(oppo_ip="1.2.3.4", oppo_mount="disc0"))
+    cap = {}
+    monkeypatch.setattr(client, "_get_json", lambda ep, timeout=None: cap.update(ep=ep) or {})
+    client.play_bdmv("Dune")
+    assert '"folderpath":"/mnt/disc0/Dune"' in urllib.parse.unquote(cap["ep"])
+
+
+# --- #30 / #12 / #13: paused state + per-flag playback reporting -------------------------------------
+
+def test_info_is_paused():
+    assert oh.info_is_paused({"status": "PAUSE"})
+    assert oh.info_is_paused({"state": "paused"})
+    assert not oh.info_is_paused({"status": "PLAY"})
+    assert not oh.info_is_paused({"is_video_playing": True})
+    assert not oh.info_is_paused({})
+
+
+def test_playback_state_four_states(monkeypatch):
+    client = _client()
+    monkeypatch.setattr(client, "get_global_info", lambda: {"is_video_playing": True, "status": "PAUSE"})
+    assert client.playback_state() == "paused"
+    monkeypatch.setattr(client, "get_global_info", lambda: {"is_video_playing": True, "status": "PLAY"})
+    assert client.playback_state() == "playing"
+    monkeypatch.setattr(client, "get_global_info", lambda: {"is_video_playing": False})
+    assert client.playback_state() == "idle"
+
+
+def test_playback_state_unknown_on_transport_error(monkeypatch):
+    client = _client()
+    monkeypatch.setattr(client, "get_global_info",
+                        lambda: (_ for _ in ()).throw(oh.OppoError("boom")))
+    assert client.playback_state() == "unknown"
+
+
+def test_playing_flags_reports_every_active_flag():
+    flags = oh.playing_flags({"is_video_playing": True, "is_bdmv_playing": False, "is_disc_playing": "1"})
+    assert flags["is_video_playing"] is True
+    assert flags["is_bdmv_playing"] is False
+    assert flags["is_disc_playing"] is True
+    assert "is_audio_playing" not in flags   # absent flags are not reported
+    assert oh.playing_flags({}) == {}
