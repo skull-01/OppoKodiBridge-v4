@@ -64,7 +64,10 @@ def derive_mount_point(path) -> "str | None":
     """The OPPO's local NFS mount point from a detected play path, e.g.
     ``/mnt/nfs2/01Movies/Dune.iso`` -> ``/mnt/nfs2`` (or None). Lets the wizard confirm/replace the
     hardcoded ``/mnt/nfs1`` assumption (see issue #14)."""
-    m = re.match(r"(/mnt/[^/\s]+)", str(path or ""))
+    # Match up to the SECOND slash, NOT excluding spaces (#33): extract_playing_path's _PATH_RE allows
+    # spaces, so a mount like ``/mnt/nfs share`` must be captured whole -- ``[^/\s]`` truncated it to
+    # ``/mnt/nfs``.
+    m = re.match(r"(/mnt/[^/]+)", str(path or ""))
     return m.group(1) if m else None
 
 
@@ -112,6 +115,14 @@ def _play_and_detect(ui, client, settings, kind: str, descr: str, capture_key: s
     )
     if apply_it:
         settings.set(capture_key, path)
+        # #33: apply the detected mount to the setting the play path ACTUALLY uses. oppo_http._mount_dir
+        # builds /mnt/<oppo_mount>/<leaf>, so write the bare dir under /mnt (e.g. '/mnt/nfs2' -> 'nfs2').
+        # Without this the wizard only recorded a cosmetic detected_*_path that nothing reads, so a box
+        # mounting anywhere but /mnt/nfs1 kept failing despite the wizard reporting success (defeats #14).
+        if mount and mount.startswith("/mnt/"):
+            mount_dir = mount[len("/mnt/"):].strip("/")
+            if mount_dir:
+                settings.set("oppo_mount", mount_dir)
     return {"detected": path, "mount": mount, "applied": bool(apply_it)}
 
 

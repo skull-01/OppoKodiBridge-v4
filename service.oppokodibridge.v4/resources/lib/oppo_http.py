@@ -392,7 +392,10 @@ def serial_command(port: str, baud: int, command: str, read_timeout: float = 2.0
             except OSError:
                 return ""
         return ""
-    except (OSError, termios.error) as exc:
+    except (OSError, termios.error, UnicodeError) as exc:
+        # UnicodeError (#35): a non-ASCII control command hits `.encode("ascii")` above -- it is neither
+        # OSError nor termios.error, so without this it escaped raw, breaking the docstring's promise that
+        # EVERY failure surfaces as OppoError (callers grab_oppo / the settings tests rely on that).
         raise OppoError("serial I/O on {} failed: {}".format(port, exc)) from exc
     finally:
         os.close(fd)

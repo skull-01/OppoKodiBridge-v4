@@ -14,6 +14,8 @@ import tempfile
 from lirc.devices import _run, LircToolError
 
 _SCANCODE_RE = re.compile(r"scancode\s*=\s*(0x[0-9a-fA-F]+)")
+_CARRIER_RE = re.compile(r"(?im)^\s*carrier\s+(\d+)")
+DEFAULT_CARRIER = 38000  # NEC/typical; a learned non-38 kHz waveform must carry its own (#40)
 
 
 def normalize_scancode(scancode) -> str:
@@ -41,21 +43,31 @@ def send_nec(dev, scancode, run_fn=_run):
     return code
 
 
-def raw_file_text(timings) -> str:
-    """Render pulse/space durations (µs) as an ``ir-ctl`` send file."""
-    lines = ["carrier 38000"]
+def raw_file_text(timings, carrier=DEFAULT_CARRIER) -> str:
+    """Render pulse/space durations (µs) as an ``ir-ctl`` send file at ``carrier`` Hz.
+
+    #40: the carrier is a parameter (not hardcoded 38000) so a waveform learned from a non-38 kHz remote
+    (Sony SIRC ~40 kHz, Philips RC-5/6 ~36 kHz) is retransmitted at its OWN carrier -- pass the carrier
+    captured by ``parse_raw_carrier`` alongside the timings."""
+    lines = ["carrier {}".format(int(carrier or DEFAULT_CARRIER))]
     for i, d in enumerate(timings):
         lines.append("{} {}".format("pulse" if i % 2 == 0 else "space", int(d)))
     return "\n".join(lines) + "\n"
 
 
-def send_raw(dev, timings, run_fn=_run, tempdir=None):
-    """Send a raw pulse/space waveform via ``ir-ctl -d <dev> --send <file>``."""
+def parse_raw_carrier(text: str):
+    """The ``carrier N`` value (Hz) from an ``ir-ctl -r`` capture, or ``None`` if not reported (#40)."""
+    m = _CARRIER_RE.search(text or "")
+    return int(m.group(1)) if m else None
+
+
+def send_raw(dev, timings, run_fn=_run, tempdir=None, carrier=DEFAULT_CARRIER):
+    """Send a raw pulse/space waveform via ``ir-ctl -d <dev> --send <file>`` at ``carrier`` Hz."""
     if not timings:
         raise LircToolError("no timings to send")
     fd, path = tempfile.mkstemp(suffix=".ir", dir=tempdir)
     try:
-        os.write(fd, raw_file_text(timings).encode("ascii"))
+        os.write(fd, raw_file_text(timings, carrier).encode("ascii"))
         os.close(fd)
         rc, out, err = run_fn(["ir-ctl", "-d", dev, "--send", path])
     finally:

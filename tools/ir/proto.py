@@ -137,6 +137,10 @@ def nec_scancode_timings(scancode: int, nbits: int = 32) -> list:
     """
     if scancode < 0:
         raise ProtoError("scancode must be non-negative")
+    if scancode >= (1 << nbits):
+        # #34: reject a code wider than nbits instead of silently dropping the high bits (which would
+        # transmit a wrong waveform, e.g. a mistyped 40-bit code sent as if it were 32-bit garbage).
+        raise ProtoError("scancode {:#x} exceeds {} bits".format(scancode, nbits))
     timings = [NEC_LEAD_MARK, NEC_LEAD_SPACE]
     for i in range(nbits):
         timings.append(NEC_BIT_MARK)

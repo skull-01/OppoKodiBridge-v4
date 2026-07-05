@@ -29,6 +29,8 @@ def test_extract_playing_path_none():
 def test_derive_mount_point():
     assert wizard.derive_mount_point("/mnt/nfs2/01Movies/x.iso") == "/mnt/nfs2"
     assert wizard.derive_mount_point("/mnt/nfs1") == "/mnt/nfs1"
+    # #33: a mount whose name contains a space must be kept whole (extract_playing_path allows spaces).
+    assert wizard.derive_mount_point("/mnt/nfs share/Movies/x.iso") == "/mnt/nfs share"
     assert wizard.derive_mount_point("nfs://host/srv/x.iso") is None
     assert wizard.derive_mount_point("") is None
 
@@ -170,6 +172,19 @@ def test_wizard_unreachable_dialog_shows_resolved_ip():
     assert summary["ping"] is False
     msg = " ".join(m for _, m in ui.oks)
     assert "192.168.10.228" in msg and "192.168.10.10" not in msg
+
+
+def test_wizard_captures_detected_mount_to_oppo_mount():
+    # #33: the detected mount must be applied to oppo_mount (the setting the play path uses), not only the
+    # cosmetic detected_*_path. The OPPO reports /mnt/nfs2 here, so oppo_mount must become 'nfs2'.
+    p2 = "/mnt/nfs2/01Movies/Dune.iso"
+    ui = FakeUI(selects=[1], inputs=["192.168.10.228"],
+                yesnos=[True, True, True, True])  # run, iso capture, bdmv capture, reclaim (M9207: no cec)
+    settings = FakeSettings()
+    client = FakeClient(globalinfo={"is_disc_playing": True, "path": p2})
+    summary, grabs, reclaims = _run(ui, client, settings)
+    assert settings.store["oppo_mount"] == "nfs2"          # #33: the real knob is written
+    assert settings.store["detected_iso_path"] == p2       # cosmetic record still kept
 
 
 def test_wizard_no_path_detected_is_graceful():
