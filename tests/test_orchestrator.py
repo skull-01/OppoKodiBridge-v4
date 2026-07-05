@@ -83,6 +83,72 @@ def test_run_none_method_does_no_tv_switch(monkeypatch):
     assert order == ["play", "watch"]
 
 
+def test_run_stops_the_oppo_on_giveup(monkeypatch):
+    # #28: playback never confirmed (watch returns False) -> a best-effort STOP so a late-starting play
+    # isn't left in flight, THEN reclaim. stop() must precede the reclaim; both run in the finally.
+    order = []
+
+    class _Client:
+        def __init__(self, cfg):
+            pass
+
+        def stop(self):
+            order.append("stop")
+
+    monkeypatch.setattr(orchestrator, "OppoClient", _Client)
+    monkeypatch.setattr(orchestrator.tvswitch.cec, "grab_oppo", lambda c: order.append("grab") or True)
+    monkeypatch.setattr(orchestrator.tvswitch.cec, "reclaim_kodi", lambda c: order.append("reclaim") or True)
+    monkeypatch.setattr(orchestrator.handoff, "play", lambda *a, **k: order.append("play") or True)
+    monkeypatch.setattr(orchestrator.monitor, "watch_playback", lambda *a, **k: order.append("watch") or False)
+    cfg = Config(oppo_ip="x", path_from="nfs://h/s", path_to="srv")
+    assert orchestrator.run(cfg, "nfs://h/s/x.iso") is False
+    assert order == ["grab", "play", "watch", "stop", "reclaim"]
+
+
+def test_run_no_giveup_stop_when_playback_confirmed(monkeypatch):
+    # the STOP is give-up-only: when playback IS observed (watch True), no STOP is sent (single-shot).
+    order = []
+
+    class _Client:
+        def __init__(self, cfg):
+            pass
+
+        def stop(self):
+            order.append("stop")
+
+    monkeypatch.setattr(orchestrator, "OppoClient", _Client)
+    monkeypatch.setattr(orchestrator.tvswitch.cec, "grab_oppo", lambda c: order.append("grab") or True)
+    monkeypatch.setattr(orchestrator.tvswitch.cec, "reclaim_kodi", lambda c: order.append("reclaim") or True)
+    monkeypatch.setattr(orchestrator.handoff, "play", lambda *a, **k: order.append("play") or True)
+    monkeypatch.setattr(orchestrator.monitor, "watch_playback", lambda *a, **k: order.append("watch") or True)
+    cfg = Config(oppo_ip="x", path_from="nfs://h/s", path_to="srv")
+    assert orchestrator.run(cfg, "nfs://h/s/x.iso") is True
+    assert order == ["grab", "play", "watch", "reclaim"]  # no "stop"
+
+
+def test_run_no_giveup_stop_when_play_never_accepted(monkeypatch):
+    # #28 audit refinement: handoff.play returns False (unmappable / mount-abort / wake-fail) -> nothing
+    # was ever put in flight, so NO give-up STOP is sent (avoids a wasted round-trip to a maybe-asleep
+    # OPPO). The STOP is gated on play_accepted, not merely `not started`.
+    order = []
+
+    class _Client:
+        def __init__(self, cfg):
+            pass
+
+        def stop(self):
+            order.append("stop")
+
+    monkeypatch.setattr(orchestrator, "OppoClient", _Client)
+    monkeypatch.setattr(orchestrator.tvswitch.cec, "grab_oppo", lambda c: order.append("grab") or True)
+    monkeypatch.setattr(orchestrator.tvswitch.cec, "reclaim_kodi", lambda c: order.append("reclaim") or True)
+    monkeypatch.setattr(orchestrator.handoff, "play", lambda *a, **k: order.append("play") or False)
+    monkeypatch.setattr(orchestrator.monitor, "watch_playback", lambda *a, **k: order.append("watch") or True)
+    cfg = Config(oppo_ip="x", path_from="nfs://h/s", path_to="srv")
+    assert orchestrator.run(cfg, "nfs://h/s/x.iso") is False
+    assert order == ["grab", "play", "reclaim"]  # no "stop", no "watch"
+
+
 def test_run_skips_when_no_oppo_configured(monkeypatch):
     order = []
     _wire(monkeypatch, order)

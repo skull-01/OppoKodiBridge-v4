@@ -4,6 +4,7 @@ import importlib
 import sys
 import types
 
+from resources.lib import config as config_mod
 from resources.lib import wizard
 from resources.lib.config import Config
 
@@ -149,6 +150,26 @@ def test_wizard_m9207_skips_grab():
     assert grabs == []                   # never power-cycled
     assert len(reclaims) == 1            # only the step-9 reclaim
     assert summary["completed"] is True
+
+
+def test_wizard_unreachable_dialog_shows_resolved_ip():
+    # #31: the operator picks M9207 but types the M9205 default (.10); resolve_oppo_ip rewrites it to
+    # .228, which is what the client actually pings. The failure dialog must name the RESOLVED .228, not
+    # the typed .10 -- otherwise it points the operator at an address that was never contacted.
+    class _ResolvingSettings(FakeSettings):
+        def config(self):
+            model = str(self.store.get("oppo_model", "M9205"))
+            return Config(
+                oppo_ip=config_mod.resolve_oppo_ip(model, str(self.store.get("oppo_ip", ""))),
+                oppo_model=model,
+            )
+
+    ui = FakeUI(yesnos=[True], selects=[1], inputs=["192.168.10.10"])  # run, M9207, typed the M9205 default
+    settings = _ResolvingSettings()
+    summary, grabs, reclaims = _run(ui, FakeClient(reachable=False), settings)
+    assert summary["ping"] is False
+    msg = " ".join(m for _, m in ui.oks)
+    assert "192.168.10.228" in msg and "192.168.10.10" not in msg
 
 
 def test_wizard_no_path_detected_is_graceful():

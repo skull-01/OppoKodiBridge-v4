@@ -38,9 +38,13 @@ def run(config, kodi_file: str, should_abort=None) -> bool:
     switcher.to_oppo()
 
     started = False
+    play_accepted = False
     try:
         if not handoff.play(config, client, kodi_file, should_abort):
             return False
+        # the OPPO accepted the file -> a play is now in flight (or about to be). Track this so the
+        # give-up STOP below fires ONLY when there is actually something to stop.
+        play_accepted = True
         # ISO auto-heal (#21): if the OPPO never reports playback within the grace window, re-issue the
         # play ONCE. handoff.play is idempotent (re-wake / bounded re-mount / re-play).
         started = monitor.watch_playback(
@@ -48,6 +52,17 @@ def run(config, kodi_file: str, should_abort=None) -> bool:
             on_stall=lambda: handoff.play(config, client, kodi_file, should_abort),
         )
     finally:
+        if play_accepted and not started:
+            # #28: the OPPO accepted the file but the watcher never confirmed playback. A slow ISO/mount
+            # can still start AFTER give-up (and the auto-heal may have re-issued the play), leaving it
+            # playing to itself while Kodi reclaims the TV -> send a best-effort STOP so nothing is left
+            # in flight. Gated on play_accepted so an unmappable-file / wake-failed / mount-abort exit
+            # (handoff.play returned False -- nothing was ever put in flight) adds no wasted OPPO round-
+            # trip. Never fatal: a transport error here must not skip the reclaim.
+            try:
+                client.stop()
+            except Exception as exc:  # noqa: BLE001 -- give-up STOP is best-effort
+                log("give-up STOP failed (non-fatal): {}".format(exc))
         # stop-side TV switch, ONCE, whether playback succeeded or failed. Single-shot; never a
         # standing re-asserter (a manual input change must stick).
         switcher.to_kodi()

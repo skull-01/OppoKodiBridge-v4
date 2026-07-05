@@ -171,9 +171,12 @@ def run_wizard(ui, client_factory, settings, *, sleep=interruptible_sleep,
     cfg = settings.config()
     client = client_factory(cfg)
     if not client.wake_and_wait():
+        # #31: show cfg.oppo_ip -- the RESOLVED address the client actually pinged. resolve_oppo_ip may
+        # rewrite a per-model-default IP (e.g. the operator picks M9207 but types the M9205 default), so
+        # echoing the typed `ip` here would name an address that was never contacted.
         ui.ok("Cannot reach the OPPO",
               "No response from {} on port {}.\nCheck the IP/network, then re-run the wizard.".format(
-                  ip, cfg.oppo_http_port))
+                  cfg.oppo_ip, cfg.oppo_http_port))
         summary["ping"] = False
         return summary
     summary["ping"] = True

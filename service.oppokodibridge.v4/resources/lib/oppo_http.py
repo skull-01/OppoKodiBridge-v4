@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import re
 import socket
 import time
 import urllib.error
@@ -139,13 +140,20 @@ def _has_share_path(prefix: str) -> bool:
 
 def detect_path_from(media_file: str, sources) -> Optional[str]:
     """The Kodi source root the played ``media_file`` lives under -- i.e. ``path_from`` derived from
-    Kodi's OWN configured sources instead of the typed setting. Longest-prefix wins, with the SAME
-    accept rule as ``split_share_relative``: a candidate matches only when the file sits strictly BELOW
-    it (a non-empty in-share remainder). So a source that EQUALS the played path -- which
+    Kodi's OWN configured sources instead of the typed setting. The SHALLOWEST (broadest) matching
+    source wins (#16). ``path_to`` is the OPPO EXPORT ROOT, and ``path_from`` pairs with it at the SAME
+    depth -- the share root. So the auto-detected ``path_from`` must anchor at that broadest level: for a
+    share with nested sub-sources (e.g. both ``.../Super3Share`` and ``.../Super3Share/Movies``), picking
+    the DEEPER source strips too much and mis-anchors ``path_to`` (the ``Movies`` segment is lost, so the
+    OPPO mounts ``<path_to>/<disc>`` instead of ``<path_to>/Movies/<disc>``). Shallowest keeps the full
+    in-share sub-path.
+
+    Same accept rule as ``split_share_relative``: a candidate matches only when the file sits strictly
+    BELOW it (a non-empty in-share remainder), so a source that EQUALS the played path -- which
     ``split_share_relative`` would reject as unmappable, stranding the handoff -- is never selected;
-    longest-prefix then falls through to the broader, mappable source. Boundary-safe (``Super3Share-4K``
-    never matches ``Super3Share``); a path-less ``scheme://host`` source is skipped. Returns the matching
-    root (trailing slash stripped) or ``None``. Pure: pass the result to ``split_share_relative`` as
+    shortest-prefix then still picks the broadest MAPPABLE source. Boundary-safe (``Super3Share-4K`` never
+    matches ``Super3Share``); a path-less ``scheme://host`` source is skipped. Returns the matching root
+    (trailing slash stripped) or ``None``. Pure: pass the result to ``split_share_relative`` as
     ``path_from``."""
     text = _decode_share(media_file)
     best: Optional[str] = None
@@ -157,7 +165,7 @@ def detect_path_from(media_file: str, sources) -> Optional[str]:
             continue
         if not text[len(prefix):].lstrip("/"):
             continue  # exact-equal / prefix-plus-slashes: no in-share path -> split would reject it
-        if best is None or len(prefix) > len(best):
+        if best is None or len(prefix) < len(best):  # shallowest/broadest mappable source wins (#16)
             best = prefix
     return best
 
@@ -169,6 +177,40 @@ def oppo_mount_folder(folder: Optional[str], path_to: str) -> str:
     if base and rel:
         return base + "/" + rel
     return base or rel
+
+
+# A /getNfsShareFolderlist entry's export path sits in a run of printable ASCII between the reply's
+# length/control bytes. Match a path-safe printable run: letters/digits + . _ - / -- NO space and NO
+# colon, so an HTTP status line / header / error prose ('HTTP/1.1 200 OK', 'Server: nginx/1.18.0') from a
+# fragile SMB->NFS proxy splits apart instead of being latched as an export root (#11 audit).
+_SHARE_TOKEN_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._\-/]*")
+
+
+def parse_nfs_share_root(raw: Any) -> Optional[str]:
+    r"""Best-effort: the OPPO NFS export ROOT from a ``/getNfsShareFolderlist`` reply -- used to
+    auto-detect ``path_to`` when the operator leaves it blank (mirrors ``detect_path_from`` for
+    ``path_from``). The reply is a length-prefixed binary blob; decoded ``utf-8 errors=replace`` it reads
+    like ``"\r\x00\x00\x00srv/nfs/media\x01..."``. Scan the printable-ASCII runs and return the first that
+    looks like an export root: at least THREE path segments (``a/b/c``, i.e. >=2 slashes -- the known
+    ``srv/nfs/media`` shape), trailing slash stripped. The >=2-slash bar plus the no-space/no-colon token
+    rule reject a proxy's HTTP/header/error/version fragment (which would otherwise be mistaken for the
+    root); a simpler 1-slash root is not auto-detected -- type ``path_to`` for those. ``None`` if nothing
+    plausible is present.
+
+    Best-effort by design: the exact framing is unconfirmed on hardware (a long root's length prefix can
+    itself be a printable byte and merge into the token), so this is validated against a real capture at
+    verify time and NEVER overrides a typed ``path_to`` -- it only fills a blank one. KNOWN LIMITATION: a
+    >=2-slash NOISE token appearing BEFORE the real root (e.g. a proxy error body that echoes a request
+    path) is still latched, not skipped. This is CONTAINED, not a mis-play: a wrong ``path_to`` yields a
+    mount folder the OPPO rejects, so ``reply_succeeded`` is false and the handoff ABORTS before play --
+    the worst case is a failed handoff, never a wrong-file play or NFS-client corruption."""
+    if not raw:
+        return None
+    for match in _SHARE_TOKEN_RE.finditer(str(raw)):
+        token = match.group(0).strip("/")
+        if token.count("/") >= 2:  # >=3 segments -> the export root; rejects 1-slash proxy fragments
+            return token
+    return None
 
 
 def local_ip_toward(host: str, port: int = 436) -> str:
@@ -211,21 +253,52 @@ def status_is_idle(status: object) -> bool:
     return str(status).strip().upper() not in PLAY_STATUSES
 
 
+_STATUS_KEYS = ("status", "state", "play_status", "e_play_status", "playStatus")
+_PAUSE_STATUSES = {"PAUSE", "PAUSED"}
+
+
+def _flag_truthy(flag: Any) -> bool:
+    if isinstance(flag, bool):
+        return flag
+    return flag is not None and str(flag).strip().lower() in ("1", "true", "yes", "playing")
+
+
 def info_is_playing(info: Any) -> bool:
     """True when a ``/getglobalinfo`` payload indicates active (or loading) playback."""
     for container in _containers(info):
         for key in _PLAYING_FLAGS:
-            flag = container.get(key)
-            if isinstance(flag, bool):
-                if flag:
-                    return True
-            elif flag is not None and str(flag).strip().lower() in ("1", "true", "yes", "playing"):
+            if _flag_truthy(container.get(key)):
                 return True
-        for key in ("status", "state", "play_status", "e_play_status", "playStatus"):
+        for key in _STATUS_KEYS:
             value = container.get(key)
             if value is not None and not status_is_idle(value):
                 return True
     return False
+
+
+def info_is_paused(info: Any) -> bool:
+    """True when ``/getglobalinfo`` reports a PAUSED transport state. Distinguished from general playing
+    so the monitor can treat a long pause specially (#30): a paused disc is alive but not progressing, so
+    it must not burn the absolute watch ceiling and get the TV reclaimed out from under it."""
+    for container in _containers(info):
+        for key in _STATUS_KEYS:
+            value = container.get(key)
+            if value is not None and str(value).strip().upper() in _PAUSE_STATUSES:
+                return True
+    return False
+
+
+def playing_flags(info: Any) -> dict:
+    """Each known playback flag present in the payload -> its truthiness (across all containers). For the
+    Setup & tests ISO/BDMV capability checks (#12/#13), which REPORT every flag the OPPO raised rather
+    than collapse to one boolean -- the clone's per-flag ISO/BDMV behaviour is unverified."""
+    out: dict = {}
+    for container in _containers(info):
+        for key in _PLAYING_FLAGS:
+            flag = container.get(key)
+            if flag is not None:
+                out[key] = bool(out.get(key)) or _flag_truthy(flag)
+    return out
 
 
 _FALSE_TOKENS = ("0", "false", "no", "off")
@@ -437,8 +510,16 @@ class OppoClient:
         )
         return self._get_json(endpoint, timeout=MOUNT_TIMEOUT)
 
+    def _mount_dir(self, nfs: bool = True) -> str:
+        """The OPPO mount directory under ``/mnt`` for the play path (``/mnt/<dir>``). The real mount
+        point can't be read back from the app API (#14), so it's a configurable OVERRIDE (``oppo_mount``,
+        default ``nfs1``); when unset it falls back to the historic ``nfs1``/``cifs1`` pair so the proven
+        ``/mnt/nfs1`` path is unchanged."""
+        configured = str(getattr(self.cfg, "oppo_mount", "") or "").strip().strip("/")
+        return configured or ("nfs1" if nfs else "cifs1")
+
     def play_file(self, server: str, rel_path: str, index: str = "0", nfs: bool = True) -> dict:
-        mount_path = "nfs1" if nfs else "cifs1"
+        mount_path = self._mount_dir(nfs)
         inner = (
             '"path":"/mnt/%s/%s","index":%s,"type":1,"appDeviceType":2,"extraNetPath":"%s","playMode":0'
             % (mount_path, rel_path, index, server)
@@ -456,7 +537,7 @@ class OppoClient:
         doesn't just check -- it starts the disc. ``disc_folder_name`` is relative to the mount; when
         the disc structure IS the mount root (a disc folder sitting at the export root) it is empty, so
         the folderpath is the bare mount (``/mnt/nfs1``) -- never a dangling ``/mnt/nfs1/``."""
-        mount_path = "nfs1" if nfs else "cifs1"
+        mount_path = self._mount_dir(nfs)
         folderpath = "/mnt/%s" % mount_path
         if disc_folder_name:
             folderpath += "/" + urllib.parse.quote(disc_folder_name)
@@ -470,16 +551,20 @@ class OppoClient:
             return False
 
     def playback_state(self) -> str:
-        """Tri-state playback probe for the stop-watcher: ``"playing"`` / ``"idle"`` / ``"unknown"``.
+        """Four-state playback probe for the stop-watcher: ``"playing"`` / ``"paused"`` / ``"idle"`` /
+        ``"unknown"``.
 
         Unlike is_playing() (which collapses a transport failure to False), this distinguishes a
         confirmed-idle read from an unreadable one, so the monitor never mistakes a network blip for a
-        stop (a premature mid-playback reclaim) nor loops forever on an unreachable OPPO."""
+        stop (a premature mid-playback reclaim) nor loops forever on an unreachable OPPO. ``"paused"`` is
+        split out from ``"playing"`` so a long pause doesn't burn the absolute watch ceiling (#30)."""
         try:
             info = self.get_global_info()
         except OppoError:
             return "unknown"
-        return "playing" if info_is_playing(info) else "idle"
+        if info_is_playing(info):
+            return "paused" if info_is_paused(info) else "playing"
+        return "idle"
 
     def send_tcp_command(self, command: str, timeout: float = 5.0) -> str:
         """Send an OPPO IP-control command on :23 (e.g. #PON / #POF) and return the reply."""

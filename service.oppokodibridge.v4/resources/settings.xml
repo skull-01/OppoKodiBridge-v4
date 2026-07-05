@@ -64,6 +64,20 @@
           </control>
           <data>RunScript(special://home/addons/service.oppokodibridge.v4/settings_tests.py,cec)</data>
         </setting>
+        <setting id="test_iso" type="action" label="30092">
+          <level>0</level>
+          <control type="button" format="action">
+            <close>false</close>
+          </control>
+          <data>RunScript(special://home/addons/service.oppokodibridge.v4/settings_tests.py,iso)</data>
+        </setting>
+        <setting id="test_bdmv" type="action" label="30093">
+          <level>0</level>
+          <control type="button" format="action">
+            <close>false</close>
+          </control>
+          <data>RunScript(special://home/addons/service.oppokodibridge.v4/settings_tests.py,bdmv)</data>
+        </setting>
         <setting id="test_wizard" type="action" label="30074">
           <level>0</level>
           <control type="button" format="action">
@@ -75,6 +89,13 @@
     </category>
     <category id="paths" label="30010">
       <group id="1">
+        <setting id="detect_path_from" type="action" label="30091">
+          <level>0</level>
+          <control type="button" format="action">
+            <close>false</close>
+          </control>
+          <data>RunScript(special://home/addons/service.oppokodibridge.v4/settings_tests.py,detectpath)</data>
+        </setting>
         <setting id="path_from_autodetect" type="boolean" label="30013">
           <level>0</level>
           <default>true</default>
@@ -92,6 +113,13 @@
           <default>/srv/nfs/media</default>
           <control type="edit" format="string">
             <heading>30012</heading>
+          </control>
+        </setting>
+        <setting id="oppo_mount" type="string" label="30090">
+          <level>2</level>
+          <default>nfs1</default>
+          <control type="edit" format="string">
+            <heading>30090</heading>
           </control>
         </setting>
       </group>

@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """In-Kodi settings test actions, invoked by the add-on's settings buttons via RunScript:
 
-    RunScript(.../settings_tests.py, ping)     -- is the OPPO reachable on the network?
-    RunScript(.../settings_tests.py, control)  -- two-way OPPO control (query power, #QPW)
-    RunScript(.../settings_tests.py, cec)      -- guided CEC switch-over test (run after a good ping)
+    RunScript(.../settings_tests.py, ping)        -- is the OPPO reachable? (wakes the :436 API first)
+    RunScript(.../settings_tests.py, control)     -- two-way OPPO control (query power, #QPW)
+    RunScript(.../settings_tests.py, cec)         -- guided CEC switch-over test (run after a good ping)
+    RunScript(.../settings_tests.py, detectpath)  -- fill path_from from Kodi's own video sources (#10)
+    RunScript(.../settings_tests.py, iso)         -- ISO playback capability check (#12)
+    RunScript(.../settings_tests.py, bdmv)        -- BDMV playback capability check (#13)
 
 Runs inside Kodi (uses xbmcgui dialogs + the add-on settings). The pure logic lives in cec.py /
 oppo_http.py (unit-tested off-box); this is just the interactive wrapper.
@@ -18,7 +21,9 @@ if HERE not in sys.path:
 
 from resources.lib import cec  # noqa: E402
 from resources.lib import config as config_mod  # noqa: E402
-from resources.lib.oppo_http import OppoClient, OppoError  # noqa: E402
+from resources.lib.oppo_http import OppoClient, OppoError, info_is_playing, playing_flags  # noqa: E402
+
+ADDON_ID = "service.oppokodibridge.v4"
 
 
 def _dialog():
@@ -36,7 +41,10 @@ def _tcp_open(host, port, timeout=4.0):
 
 
 def cmd_ping(cfg, dlg):
-    http = _tcp_open(cfg.oppo_ip, cfg.oppo_http_port)
+    # #29: the :436 app API sleeps after boot and must be OREMOTE-woken before it answers -- a raw probe
+    # of a present-but-idle OPPO reports a false UNREACHABLE. wake_and_wait sends the wake and returns as
+    # soon as the port answers (bounded), so this both wakes the API and checks reachability.
+    http = OppoClient(cfg).wake_and_wait(attempts=4, interval=1.0)
     if getattr(cfg, "serial_control", False):
         # Serial control drives the OPPO over RS-232, not the network :23 port -- report the cable,
         # not a misleading ":23 UNREACHABLE".
@@ -102,6 +110,62 @@ def cmd_cec(cfg, dlg):
     )
 
 
+def _addon():
+    import xbmcaddon
+
+    return xbmcaddon.Addon(ADDON_ID)
+
+
+def cmd_detectpath(cfg, dlg):
+    # #10: fill path_from from Kodi's OWN video sources, on demand. Kodi-side only (the same localhost
+    # JSON-RPC the reclaim uses) -- no OPPO contact, so it works without waking the box. Complements #9's
+    # silent play-time fallback by letting the operator pre-populate and SEE the prefix up front.
+    sources = cec.kodi_video_sources(cfg)
+    if not sources:
+        dlg.ok("Detect path from Kodi",
+               "No Kodi video sources found.\nAdd your NAS as a video source in Kodi first, then retry.")
+        return
+    idx = dlg.select("Pick the source that holds your OPPO discs", list(sources))
+    if idx is None or idx < 0:
+        return
+    chosen = str(sources[idx]).rstrip("/")
+    _addon().setSettingString("path_from", chosen)
+    dlg.ok("Detect path from Kodi", "Kodi path prefix set to:\n{}".format(chosen))
+
+
+def cmd_playback(cfg, dlg, kind):
+    # #12 / #13: capability check -- ask the operator to start an ISO / BDMV disc on the OPPO, then read
+    # /getglobalinfo and report EVERY playback flag the OPPO raised (not just one -- the clone's per-flag
+    # ISO/BDMV behaviour is unverified). Reference-aligned: /getglobalinfo is the HTTP monitor primitive.
+    label = "ISO" if kind == "iso" else "BDMV"
+    media = "an ISO disc image" if kind == "iso" else "a Blu-ray (BDMV) disc folder"
+    client = OppoClient(cfg)
+    if not client.wake_and_wait(attempts=4, interval=1.0):  # #29-style wake (the API sleeps)
+        dlg.ok("{} playback check".format(label),
+               "Can't reach the OPPO app API on :{}.\nRun Ping first.".format(cfg.oppo_http_port))
+        return
+    if not dlg.yesno("{} playback check".format(label),
+                     "Start {} playing on the OPPO now (use its remote), then press Yes.".format(media)):
+        return
+    try:
+        info = client.get_global_info()
+    except OppoError as exc:
+        dlg.ok("{} playback check".format(label), "Couldn't read the OPPO: {}".format(exc))
+        return
+    active = [name for name, on in playing_flags(info).items() if on]
+    if active:
+        dlg.ok("{} playback check".format(label),
+               "OPPO reports playback. ✓\nActive flags: {}".format(", ".join(sorted(active))))
+    elif info_is_playing(info):
+        # Some firmware signals playback only via a status token (no booleans). Honour the SAME signal
+        # the stop-monitor uses (info_is_playing), so this check can't disagree with the monitor.
+        dlg.ok("{} playback check".format(label),
+               "OPPO reports playback (via status token, no flags). ✓")
+    else:
+        dlg.ok("{} playback check".format(label),
+               "The OPPO did NOT report playback.\nMake sure {} is actually playing, then retry.".format(media))
+
+
 def main(argv):
     mode = argv[1] if len(argv) > 1 else "ping"
     cfg = config_mod.from_addon()
@@ -112,6 +176,10 @@ def main(argv):
         cmd_control(cfg, dlg)
     elif mode == "cec":
         cmd_cec(cfg, dlg)
+    elif mode == "detectpath":
+        cmd_detectpath(cfg, dlg)
+    elif mode in ("iso", "bdmv"):
+        cmd_playback(cfg, dlg, mode)
     else:
         dlg.ok("OppoKodiBridge CEC", "Unknown test: {}".format(mode))
 
