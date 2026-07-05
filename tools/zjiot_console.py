@@ -27,6 +27,19 @@ def parse_us(text):
     return [int(x) for x in str(text).replace(",", " ").split()]
 
 
+def _slot_byte(index):
+    """A validated slot index as a byte (#39). Reject out-of-range instead of silently masking with
+    ``& 0xFF`` -- masking addressed the WRONG slot (256 -> 0, -1 -> 255), firing the wrong stored IR code
+    with no error and a log line that looked correct."""
+    try:
+        idx = int(index)
+    except (TypeError, ValueError) as exc:
+        raise SerialToolError("slot index is not an integer: {!r}".format(index)) from exc
+    if not 0 <= idx <= 0xFF:
+        raise SerialToolError("slot index out of range (0-255): {!r}".format(index))
+    return idx
+
+
 def _fmt_reply(reply):
     if reply is None:
         return "(no reply)"
@@ -97,11 +110,11 @@ class ZjiotController:
         return reply
 
     def send_slot(self, index):
-        return self.send_command(proto.AFN_SEND_SLOT, bytes([index & 0xFF]))
+        return self.send_command(proto.AFN_SEND_SLOT, bytes([_slot_byte(index)]))
 
     def write_slot(self, index, raw):
         return self.send_command(
-            proto.AFN_WRITE_SLOT, bytes([index & 0xFF]) + bytes(raw), expect_reply=True
+            proto.AFN_WRITE_SLOT, bytes([_slot_byte(index)]) + bytes(raw), expect_reply=True
         )
 
     def send_raw(self, raw):
@@ -149,7 +162,10 @@ if _TK_OK:
             self.title("ZJIoT IR console")
             self.geometry("620x760")
             self._log_pane = tkutil.LogPane(self, height=12)
-            self.ctl = ZjiotController(log=self._log_pane.log)
+            # #39: the controller can log from a WORKER thread (learn()), and Tk is not thread-safe, so
+            # route every controller log line onto the main loop via after(0) instead of touching the
+            # widget directly. (Main-thread callers are unaffected -- after(0) just defers one tick.)
+            self.ctl = ZjiotController(log=self._safe_log)
             self._last_learn = b""
             self._build()
             self._log_pane.pack(fill="both", expand=True, padx=8, pady=4)
@@ -213,6 +229,10 @@ if _TK_OK:
             ttk.Button(lb, text="Send selected", command=self._lib_send).pack(side="left")
 
         # -- helpers -----------------------------------------------------------
+        def _safe_log(self, msg):
+            # thread-safe log: marshal onto the Tk main loop (#39). Safe to call from any thread.
+            self.after(0, lambda m=msg: self._log_pane.log(m))
+
         def _guard(self, fn):
             try:
                 fn()
@@ -254,9 +274,12 @@ if _TK_OK:
             def worker():
                 try:
                     data = self.ctl.learn()
-                    self._last_learn = data
+                    # #39: marshal the result back to the main loop; don't touch Tk (or shared state used
+                    # by the UI) from the worker thread. Controller logging is already marshalled via
+                    # _safe_log, so learn()'s internal log lines are safe too.
+                    self.after(0, lambda d=data: setattr(self, "_last_learn", d))
                 except Exception as exc:
-                    self.after(0, lambda: self._log_pane.log("ERROR: {}".format(exc)))
+                    self.after(0, lambda e=exc: self._log_pane.log("ERROR: {}".format(e)))
 
             threading.Thread(target=worker, daemon=True).start()
 

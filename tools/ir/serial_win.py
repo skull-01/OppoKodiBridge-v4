@@ -18,6 +18,7 @@ from ir import proto
 DEFAULT_BAUD = 9600  # provisional — confirm against the module manual
 ACK_TIMEOUT = 1.0
 MAX_ATTEMPTS = 2
+MAX_RESYNC_BYTES = 64  # bound on leading noise bytes to skip while hunting the 0x68 header (#39)
 
 
 class SerialToolError(RuntimeError):
@@ -115,12 +116,29 @@ class ZjiotSerial:
         raise SerialToolError("no valid reply after {} attempt(s): {}".format(attempts, last))
 
     def _read_frame(self):
-        """Read one ``0x68 … 0x16`` frame using the length field; None on timeout."""
-        head = self._h.read(3)
-        if len(head) < 3 or head[0] != proto.HEADER:
+        """Read one ``0x68 … 0x16`` frame using the length field; None on timeout.
+
+        Byte-aligns to the 0x68 header first (#39): a single stray/noise byte (line-settling right after
+        open, a framing glitch, a trailing byte from a prior frame) must not permanently desync the
+        reader. The old code read a fixed 3 bytes and bailed if byte[0] wasn't the header, so on the retry
+        it re-read from the MIDDLE of the good frame and failed forever. Now: scan forward one byte at a
+        time, discarding non-header bytes (bounded by MAX_RESYNC_BYTES), until the header is seen, then
+        read the length + payload. A read that returns nothing is a timeout -> None."""
+        header = b""
+        for _ in range(MAX_RESYNC_BYTES):
+            b = self._h.read(1)
+            if not b:
+                return None  # timeout / no more data
+            if b[0] == proto.HEADER:
+                header = b
+                break
+        if not header:
+            return None  # only noise, never found the header within the bound
+        lenbytes = self._h.read(2)  # LEN_lo, LEN_hi
+        if len(lenbytes) < 2:
             return None
-        length = head[1] | (head[2] << 8)
+        length = lenbytes[0] | (lenbytes[1] << 8)
         rest = self._h.read(length + 2)  # body + checksum + tail
         if len(rest) < length + 2:
             return None
-        return head + rest
+        return header + lenbytes + rest

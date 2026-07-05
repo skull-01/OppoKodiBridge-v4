@@ -438,6 +438,14 @@ def test_serial_command_bad_baud_becomes_oppoerror(monkeypatch):
         oh.serial_command("/dev/ttyUSB0", "not-a-number", "#PON")
 
 
+def test_serial_command_non_ascii_becomes_oppoerror(monkeypatch):
+    # #35: a non-ASCII command hits `.encode("ascii")` -> UnicodeEncodeError, which is neither OSError nor
+    # termios.error -- it must still surface as OppoError (the function's non-fatal contract).
+    _install_fake_termios(monkeypatch, tcgetattr=lambda fd: [0, 0, 0, 0, 0, 0, 0])
+    with pytest.raises(oh.OppoError):
+        oh.serial_command("/dev/ttyUSB0", 9600, "#PÖN")  # Ö is non-ASCII
+
+
 # --- power_cycle must still fire #PON when #POF fails (b6) ---
 def test_power_cycle_sends_pon_when_poff_fails(monkeypatch):
     client = _client()

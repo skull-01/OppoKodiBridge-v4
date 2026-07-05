@@ -7,6 +7,9 @@
 > [ARCHITECTURE.md](ARCHITECTURE.md). The implementation files referenced below
 > (`resources/lib/broadlink_rm4.py`, `resources/lib/ir.py`) were **never merged into this tree**, so
 > nothing here reflects the current codebase. Kept only as a design record should IR be revisited.
+> The one Broadlink artifact that *was* in the tree, `tools/learn_ir.py`, imported the never-merged
+> `broadlink_rm4` module and so crashed on import; it has been **removed** (#37). v4's IR path is the
+> ZJIoT / LIRC transports (`ir_zjiot.py` / `ir_lirc.py`) with their own bench tools under `tools/`.
 
 > **Historical status (IR branch — not in this build):** the wiring fix, the timing change, the
 > hand-rolled Broadlink client, the sequencing layer, the learn tool, and the off-box test suite were

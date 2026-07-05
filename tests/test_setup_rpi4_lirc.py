@@ -1,8 +1,12 @@
 """The RPi4 LIRC provisioner (tools/setup_rpi4_lirc.py): OS detection, idempotent overlay planning,
 and the backed-up apply -- all via injected fns (no real /boot writes)."""
+import setup_rpi4_lirc as prov
 from setup_rpi4_lirc import (
     RX_OVERLAY,
     TX_OVERLAY,
+    _backup,
+    _run,
+    _write,
     apply_overlays,
     build_plan,
     detect_config_path,
@@ -65,3 +69,33 @@ def test_apply_overlays_idempotent_noop():
         backup=lambda p, t: calls.__setitem__("backup", calls["backup"] + 1),
     )
     assert added == [] and calls == {"write": 0, "backup": 0}  # no write / no backup when nothing to add
+
+
+def test_write_is_atomic_and_leaves_no_temp(tmp_path):
+    # #38: _write must produce exactly the new content and leave no temp file (temp -> os.replace).
+    p = tmp_path / "config.txt"
+    p.write_text("old contents\n", encoding="utf-8")
+    _write(str(p), "new contents\n")
+    assert p.read_text(encoding="utf-8") == "new contents\n"
+    assert [f.name for f in tmp_path.iterdir()] == ["config.txt"]  # the .okb-tmp-* was renamed away
+
+
+def test_backup_preserves_the_pristine_original(tmp_path):
+    # #38: a second apply must NOT overwrite the first (pristine) .okb-bak.
+    p = tmp_path / "config.txt"
+    bak = tmp_path / "config.txt.okb-bak"
+    _backup(str(p), "PRISTINE")
+    assert bak.read_text(encoding="utf-8") == "PRISTINE"
+    _backup(str(p), "ALREADY-PATCHED")  # second --apply run
+    assert bak.read_text(encoding="utf-8") == "PRISTINE"  # unchanged -- original preserved
+
+
+def test_run_returns_rc_out_err(monkeypatch):
+    # #38: _run returns (returncode, stdout, stderr) so callers can surface the real apt/reboot error.
+    class _P:
+        returncode = 7
+        stdout = "OUT"
+        stderr = "ERR"
+
+    monkeypatch.setattr(prov.subprocess, "run", lambda *a, **k: _P())
+    assert _run(["anything"]) == (7, "OUT", "ERR")

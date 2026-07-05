@@ -29,7 +29,7 @@ sys.path.insert(
     ),
 )
 from resources.lib.config import Config  # noqa: E402
-from resources.lib.oppo_http import OppoClient, OppoError  # noqa: E402
+from resources.lib.oppo_http import OppoClient, OppoError, local_ip_toward  # noqa: E402
 
 
 def _dump(label: str, value: object) -> None:
@@ -49,13 +49,20 @@ def main(argv: list) -> int:
     client = OppoClient(Config(oppo_ip=ip, socket_timeout=6.0))
 
     print("Probing OPPO at {} ...".format(ip))
-    try:
-        client.activate()
-    except OSError as exc:
-        print("activate (UDP) failed (non-fatal): {!r}".format(exc))
-    for label, fn in (("wake", client.wake), ("signin", client.signin)):
+    # wake the :436 app API (UDP OREMOTE notify + wait), then run the same init dance handoff.play uses
+    # so the session is valid for the reads. (Older code here called client.activate()/client.wake, which
+    # never existed on OppoClient -- #36.)
+    if not client.wake_and_wait():
+        print("wake failed: :{} did not come up (OPPO powered on / reachable?) -- trying anyway".format(
+            client.cfg.oppo_http_port))
+    app_ip = local_ip_toward(ip, client.cfg.oppo_http_port)
+    for label, call in (
+        ("get_firmware_version", client.get_firmware_version),
+        ("get_setup_menu", client.get_setup_menu),
+        ("signin", lambda: client.signin(app_ip)),
+    ):
         try:
-            fn()
+            call()
         except OppoError as exc:
             print("{} failed (continuing): {}".format(label, exc))
 
@@ -72,7 +79,9 @@ def main(argv: list) -> int:
     payload = json.dumps({"path": start_path, "fileType": 1, "mediaType": 3, "flag": 1})
     query = "payload=" + urllib.parse.quote(payload, safe="")
     try:
-        body = client._get("/getfilelist", query=query, timeout=10)
+        # fold the querystring into the endpoint -- _get(endpoint, timeout, retries) has no `query` kwarg
+        # (the old `query=` call raised TypeError, uncaught -- #36). Matches the signin/mount pattern.
+        body = client._get("/getfilelist?" + query, timeout=10)
         try:
             _dump("getfilelist {}".format(start_path), json.loads(body))
         except ValueError:

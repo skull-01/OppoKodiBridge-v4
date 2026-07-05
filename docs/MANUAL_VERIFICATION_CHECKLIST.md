@@ -145,3 +145,22 @@ design decision, intentionally **not** built.
 | 36 | [#28](https://github.com/skull-01/OppoKodiBridge-v4/issues/28) `16c3cb1` | **Give-up STOP (observational):** if a handoff ever gives up (slow/never-starting ISO), watch the OPPO. | The OPPO isn't left playing to itself after Kodi reclaims the TV. No STOP is sent on an unmappable-file abort. |
 | 37 | [#30](https://github.com/skull-01/OppoKodiBridge-v4/issues/30) `16c3cb1` | **Pause tolerance:** pause a disc on the OPPO for a long time. | The TV isn't reclaimed out from under the pause at the ~6h mark (pause has its own budget; the watch still terminates, bounded ~2×). |
 | 38 | [#31](https://github.com/skull-01/OppoKodiBridge-v4/issues/31) `16c3cb1` | **Wizard IP display:** run the wizard, pick M9207 but type the M9205 default IP (`192.168.10.10`) with the OPPO off. | The "cannot reach" dialog names the **resolved** `192.168.10.228` (actually pinged), not the typed `.10`. |
+
+---
+
+## sweep fixes #33–#40 — branch `fix/sweep-33-40`
+
+Off-box suite: **277 passed**. Built under Protocol 1; independent adversarial re-audit (8-agent + verify) —
+all fixes correct, no regressions. Shipped add-on: #33 (HIGH), #34 (guard only — byte-order deferred), #35.
+Dev tools: #36–#40. All implemented in `0619b70`. No release (held); tool bundles refreshed at promote time.
+
+| # | Issue / SHA | Check | What you should see |
+|---|-------------|-------|---------------------|
+| 39 | [#33](https://github.com/skull-01/OppoKodiBridge-v4/issues/33) `0619b70` | **Wizard mount capture:** on a box that mounts at a **non-`nfs1`** path, run the wizard, play an ISO/BDMV, confirm "Capture this?". | `oppo_mount` is set to the detected dir (e.g. `nfs2`) and later handoffs mount `/mnt/nfs2/...` and play — no longer silently stuck on `/mnt/nfs1`. |
+| 40 | [#34](https://github.com/skull-01/OppoKodiBridge-v4/issues/34) `0619b70` | **Over-wide IR code (software):** covered off-box — an `>nbits` scancode raises instead of transmitting garbage. ⚠️ The ZJIoT-vs-LIRC **byte-order** difference is **deferred** (needs the ZJIoT module on hardware). | No hardware step for the guard. Byte-order stays as-is until confirmed on a real ZJIoT module. |
+| 41 | [#35](https://github.com/skull-01/OppoKodiBridge-v4/issues/35) `0619b70` | **Serial non-ASCII (software):** covered off-box. | A non-ASCII control command surfaces as a handled error, not a raw crash. |
+| 42 | [#36](https://github.com/skull-01/OppoKodiBridge-v4/issues/36) `0619b70` | **probe_oppo (needs the OPPO up):** `python tools/probe_oppo.py <oppo-ip> /mnt`. | It completes and dumps `getglobalinfo` / `getdevicelist` / `getfilelist` — no `activate()`/`_get(query=)` crash. |
+| 43 | [#37](https://github.com/skull-01/OppoKodiBridge-v4/issues/37) `0619b70` | **learn_ir removed:** `ls tools/learn_ir.py`. | Gone (was a crash-on-import dead Broadlink tool). |
+| 44 | [#38](https://github.com/skull-01/OppoKodiBridge-v4/issues/38) `0619b70` | **Provisioner (needs a Pi):** `sudo python3 tools/setup_rpi4_lirc.py --apply`, then re-run with `--with-receiver`. | `config.txt` is never left truncated (atomic write); `.okb-bak` keeps the **pristine** original across both runs; an apt failure aborts before patching and prints the real error. |
+| 45 | [#39](https://github.com/skull-01/OppoKodiBridge-v4/issues/39) `0619b70` | **ZJIoT console (needs the module):** enter a slot index > 255; send/learn over a noisy line. | Out-of-range slot shows an error dialog (does **not** blast the wrong slot); a stray serial byte no longer permanently loses replies. |
+| 46 | [#40](https://github.com/skull-01/OppoKodiBridge-v4/issues/40) `0619b70` | **LIRC console (needs a Pi + RX):** run the loopback self-test with the RX unplugged. | The FAIL now names the **capture error** instead of a bare "FAIL". (Raw-carrier persistence is a documented follow-up; NEC codes unaffected.) |

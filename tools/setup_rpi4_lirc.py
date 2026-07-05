@@ -25,6 +25,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 
 # config.txt candidates, most-specific first: Bookworm, older RPi OS (Bullseye/Buster), LibreELEC.
 CONFIG_CANDIDATES = ("/boot/firmware/config.txt", "/boot/config.txt", "/flash/config.txt")
@@ -90,17 +91,42 @@ def apply_overlays(path, with_receiver=False, read=_read, write=None, backup=Non
 
 
 def _write(path, text):
-    with open(path, "w", encoding="utf-8") as fh:
-        fh.write(text)
+    # Atomic (#38): write to a temp file in the SAME directory, fsync, then os.replace. A plain
+    # open(path,"w") truncates config.txt to 0 bytes first, so a crash / disk-full / I/O error between the
+    # truncate and the completed write leaves /boot/.../config.txt empty or half-written -- which can stop
+    # the Pi booting. os.replace is atomic on the same filesystem, so config.txt is never seen truncated.
+    directory = os.path.dirname(os.path.abspath(path))
+    fd, tmp = tempfile.mkstemp(dir=directory, prefix=".okb-tmp-config-")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def _backup(path, text):
-    with open(path + ".okb-bak", "w", encoding="utf-8") as fh:
+    # #38: preserve the FIRST (pristine) backup. A second --apply (e.g. later --with-receiver) calls this
+    # again with the ALREADY-patched text; overwriting .okb-bak would destroy the only 'restore original'
+    # copy. Keep the original -- write the backup only if it does not already exist.
+    bak = path + ".okb-bak"
+    if os.path.exists(bak):
+        return
+    with open(bak, "w", encoding="utf-8") as fh:
         fh.write(text)
 
 
 def _run(args):
-    return subprocess.run(args, capture_output=True, text=True).returncode
+    # #38: return (returncode, stdout, stderr) -- callers surface the real error (apt/reboot failures were
+    # opaque when only the returncode was returned).
+    proc = subprocess.run(args, capture_output=True, text=True)
+    return proc.returncode, proc.stdout, proc.stderr
 
 
 def verify(run=None):
@@ -143,9 +169,19 @@ def main(argv=None):
         print("No config.txt found; cannot apply. Aborting.")
         return 2
     if plan["install_v4l_utils"]:
+        # #38: refresh the package lists first (a fresh Pi image has none -> 'Unable to locate package'),
+        # and treat an install failure as FATAL -- do NOT patch config.txt and claim success when ir-ctl
+        # is still missing. Surface the real apt stderr so the operator can see why.
+        print("Refreshing package lists (apt-get update) ...")
+        upd_rc, _, upd_err = _run(["apt-get", "update"])
+        if upd_rc != 0:
+            print("WARNING: apt-get update failed:\n{}".format(upd_err.strip() or "(no stderr)"))
         print("Installing v4l-utils ...")
-        if _run(["apt-get", "install", "-y", "v4l-utils"]) != 0:
-            print("WARNING: v4l-utils install failed -- install it manually.")
+        rc, _, err = _run(["apt-get", "install", "-y", "v4l-utils"])
+        if rc != 0:
+            print("ERROR: v4l-utils install failed -- NOT patching config.txt:\n{}".format(
+                err.strip() or "(no stderr)"))
+            return 2
     added = apply_overlays(plan["config_path"], with_receiver=args.with_receiver, write=_write, backup=_backup)
     if added:
         print("Added to {}: {}  (backup: {}.okb-bak)".format(plan["config_path"], ", ".join(added), plan["config_path"]))

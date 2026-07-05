@@ -79,6 +79,11 @@ class LircController:
         self.log("sent {} edge(s) on {}".format(len(timings), self.tx.path))
 
     def learn_raw(self, timeout=10.0):
+        # NOTE (#40): the ctl layer is carrier-aware (raw_file_text/send_raw take a carrier;
+        # parse_raw_carrier extracts it), but this console's learn->store->replay path does not yet
+        # PERSIST a per-code carrier -- ir.codes.IrCode has no carrier field, so a captured raw code
+        # replays at DEFAULT_CARRIER (38000). NEC codes -- the OPPO HDMI-input use case -- are unaffected
+        # (send_nec, not raw). Full raw-carrier persistence is a documented follow-up.
         self._require_rx()
         timings = ctl.learn_raw(self.rx.path, run_fn=self._run, timeout=timeout)
         self.log("captured {} raw edge(s)".format(len(timings)))
@@ -131,7 +136,10 @@ if _TK_OK:
             self.title("LIRC IR console (Raspberry Pi 4)")
             self.geometry("620x720")
             self._log_pane = tkutil.LogPane(self, height=12)
-            self.ctl = LircController(log=self._log_pane.log)
+            # Same off-thread-Tk hardening as the ZJIoT console (#39): learn / self-test run the
+            # controller on worker threads, and its log lines hit the Tk widget -- route them onto the
+            # main loop via after(0) instead of touching Tk directly.
+            self.ctl = LircController(log=self._safe_log)
             self._last_learn = []
             self._build()
             self._log_pane.pack(fill="both", expand=True, padx=8, pady=4)
@@ -186,6 +194,10 @@ if _TK_OK:
             ttk.Button(lb, text="Send selected", command=self._lib_send).pack(side="left")
 
         # -- helpers -----------------------------------------------------------
+        def _safe_log(self, msg):
+            # thread-safe log: marshal onto the Tk main loop (#39/#40). Safe from any thread.
+            self.after(0, lambda m=msg: self._log_pane.log(m))
+
         def _guard(self, fn):
             try:
                 fn()
@@ -237,9 +249,10 @@ if _TK_OK:
 
             def worker():
                 try:
-                    self._last_learn = ("raw", self.ctl.learn_raw())
+                    timings = self.ctl.learn_raw()
+                    self.after(0, lambda t=timings: setattr(self, "_last_learn", ("raw", t)))
                 except Exception as exc:
-                    self.after(0, lambda: self._log_pane.log("ERROR: {}".format(exc)))
+                    self.after(0, lambda e=exc: self._log_pane.log("ERROR: {}".format(e)))
 
             threading.Thread(target=worker, daemon=True).start()
 
@@ -249,9 +262,9 @@ if _TK_OK:
             def worker():
                 try:
                     seen = self.ctl.learn_decoded("nec")
-                    self._last_learn = ("nec", seen[-1] if seen else "")
+                    self.after(0, lambda s=seen: setattr(self, "_last_learn", ("nec", s[-1] if s else "")))
                 except Exception as exc:
-                    self.after(0, lambda: self._log_pane.log("ERROR: {}".format(exc)))
+                    self.after(0, lambda e=exc: self._log_pane.log("ERROR: {}".format(e)))
 
             threading.Thread(target=worker, daemon=True).start()
 
@@ -291,6 +304,14 @@ if _TK_OK:
                 except Exception as exc:
                     self.after(0, lambda: self._log_pane.log("ERROR: {}".format(exc)))
                 t.join(timeout=8)
+                cap_err = result.get("err")
+                if cap_err:
+                    # #40: surface the capture thread's error instead of hiding it behind a bare FAIL --
+                    # a capture crash (no RX, ir-keytable missing, permissions) then looked identical to
+                    # "TX blasted but RX heard nothing".
+                    self.after(0, lambda e=cap_err: self._log_pane.log(
+                        "LOOPBACK FAIL — capture error: {}".format(e)))
+                    return
                 ok = self.ctl.check_loopback(want, result.get("seen", []))
                 self.after(0, lambda: self._log_pane.log("LOOPBACK {}".format("PASS" if ok else "FAIL")))
 

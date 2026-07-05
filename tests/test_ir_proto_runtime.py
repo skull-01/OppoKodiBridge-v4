@@ -30,3 +30,12 @@ def test_nec_scancode_and_pack_roundtrip():
     t = p.nec_scancode_timings(0x1, nbits=4)
     assert len(t) == 2 + 4 * 2 + 1 and t[3] == p.NEC_ONE_SPACE
     assert p.unpack_raw(p.pack_raw([9000, 4500, 560])) == [9000, 4500, 560]
+
+
+def test_nec_scancode_timings_rejects_over_wide():
+    # #34: reject a code wider than nbits instead of silently truncating it (shipped runtime codec).
+    with pytest.raises(p.ProtoError):
+        p.nec_scancode_timings(0x1_0000_0000)     # 33 bits, default nbits=32
+    with pytest.raises(p.ProtoError):
+        p.nec_scancode_timings(0x10, nbits=4)      # 5 bits > 4
+    assert p.nec_scancode_timings(0xFFFFFFFF)       # exactly 32 bits -> fine

@@ -40,6 +40,30 @@ def test_raw_file_text():
     assert "pulse 9000" in txt and "space 4500" in txt and "pulse 560" in txt
 
 
+def test_raw_file_text_carrier_is_parametrized():
+    # #40: the carrier is a parameter (default 38000) so a non-38 kHz learned waveform is replayable.
+    assert "carrier 38000" in ctl.raw_file_text([9000, 4500])
+    assert "carrier 40000" in ctl.raw_file_text([9000, 4500], carrier=40000)
+
+
+def test_parse_raw_carrier():
+    # #40: extract the carrier from an ir-ctl -r capture so it can be carried back on send.
+    assert ctl.parse_raw_carrier("carrier 40000\npulse 9000\nspace 4500") == 40000
+    assert ctl.parse_raw_carrier("+9000 -4500") is None
+
+
+def test_send_raw_uses_given_carrier(tmp_path):
+    seen = {}
+
+    def run(args, timeout=5.0):
+        with open(args[-1]) as fh:
+            seen["content"] = fh.read()
+        return 0, "", ""
+
+    ctl.send_raw("/dev/lirc0", [9000, 4500], run_fn=run, tempdir=str(tmp_path), carrier=36000)
+    assert "carrier 36000" in seen["content"]
+
+
 def test_send_raw_writes_file_and_args(tmp_path):
     seen = {}
 

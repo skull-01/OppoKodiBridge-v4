@@ -65,3 +65,13 @@ def test_nec_scancode_timings_lsb_first():
     assert len(t) == 2 + 4 * 2 + 1
     assert t[3] == proto.NEC_ONE_SPACE  # LSB of 0x1 is 1
     assert t[5] == proto.NEC_ZERO_SPACE  # next bit is 0
+
+
+def test_nec_scancode_timings_rejects_over_wide():
+    # #34: a code wider than nbits must raise, not silently drop the high bits into a wrong waveform.
+    with pytest.raises(proto.ProtoError):
+        proto.nec_scancode_timings(0x1_0000_0000)      # 33 bits, default nbits=32
+    with pytest.raises(proto.ProtoError):
+        proto.nec_scancode_timings(0x10, nbits=4)       # 0x10 needs 5 bits > 4
+    assert proto.nec_scancode_timings(0xFFFFFFFF)        # exactly 32 bits -> fine
+    assert proto.nec_scancode_timings(0xF, nbits=4)      # exactly 4 bits -> fine

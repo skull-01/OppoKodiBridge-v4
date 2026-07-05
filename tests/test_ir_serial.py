@@ -42,6 +42,15 @@ def test_send_reads_and_parses_reply():
     assert parsed["afn"] == proto.AFN_LEARN and parsed["data"] == b"\xaa\xbb"
 
 
+def test_read_frame_resyncs_past_leading_noise():
+    # #39: a stray/noise byte before the 0x68 header must NOT desync the reader -- it byte-aligns to the
+    # header first. Old code read a fixed 3 bytes and failed forever on the retry (read mid-frame).
+    good = proto.build(0, proto.AFN_LEARN, b"\xaa\xbb")
+    zs, port = make(b"\x00\xff" + good)  # two noise bytes, then a valid frame
+    parsed = zs.send_frame(proto.build(0, proto.AFN_LEARN, b""), expect_reply=True)
+    assert parsed["afn"] == proto.AFN_LEARN and parsed["data"] == b"\xaa\xbb"
+
+
 def test_timeout_raises_after_retries():
     zs, port = make(b"")
     frame = proto.build(0, proto.AFN_LEARN, b"")

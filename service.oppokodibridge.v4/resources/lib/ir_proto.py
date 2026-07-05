@@ -95,9 +95,17 @@ def nec_timings(address: int, command: int, extended: bool = False) -> list:
 
 
 def nec_scancode_timings(scancode: int, nbits: int = 32) -> list:
-    """NEC timings for a raw ``nbits`` scancode transmitted LSB-first (replays a stored ``nec`` code)."""
+    """NEC timings for a raw ``nbits`` scancode transmitted LSB-first (replays a stored ``nec`` code).
+
+    NOTE (#34): this walks the whole integer LSB-first, so the four NEC bytes land as ef,10,e3,57 for
+    0x57e310ef -- the reverse BYTE order of the canonical NEC frame the LIRC/ir-ctl path produces. Making
+    the two IR transports agree needs the ZJIoT module's real byte order confirmed on hardware, so the
+    reversal is deferred; only the over-wide guard below is applied here."""
     if scancode < 0:
         raise ProtoError("scancode must be non-negative")
+    if scancode >= (1 << nbits):
+        # #34: reject a code wider than nbits instead of silently truncating it to a wrong waveform.
+        raise ProtoError("scancode {:#x} exceeds {} bits".format(scancode, nbits))
     timings = [NEC_LEAD_MARK, NEC_LEAD_SPACE]
     for i in range(nbits):
         timings.append(NEC_BIT_MARK)

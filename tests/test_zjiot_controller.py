@@ -1,6 +1,7 @@
 import pytest
 
 from ir import proto, codes
+from ir.serial_win import SerialToolError
 from zjiot_console import ZjiotController
 
 
@@ -59,6 +60,22 @@ def test_send_slot_builds_frame():
     ctl.send_slot(3)
     parsed = proto.parse(fs.frames[-1])
     assert parsed["afn"] == proto.AFN_SEND_SLOT and parsed["data"] == b"\x03"
+
+
+def test_send_slot_rejects_out_of_range():
+    # #39: an out-of-range slot must raise, not silently mask (& 0xFF) and address the WRONG slot.
+    ctl, fs = make()
+    for bad in (256, -1, 1000):
+        with pytest.raises(SerialToolError):
+            ctl.send_slot(bad)
+    assert fs.frames == []  # nothing was ever sent for an invalid slot
+
+
+def test_write_slot_rejects_out_of_range():
+    ctl, fs = make()
+    with pytest.raises(SerialToolError):
+        ctl.write_slot(256, b"\x01")
+    assert fs.frames == []
 
 
 def test_send_nec_frame_carries_timings():
