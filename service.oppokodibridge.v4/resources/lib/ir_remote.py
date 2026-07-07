@@ -120,11 +120,18 @@ def ssh_args(config):
     if not host:
         return None
     user = str(getattr(config, "ir_blaster_user", "") or "").strip()
+    key = str(getattr(config, "ir_blaster_ssh_key", "") or "").strip()
+    # Defense-in-depth: reject option-shaped values (leading '-'). These are operator-set settings, not
+    # attacker input, so this is a footgun guard rather than a privilege boundary -- but ssh has no
+    # reliable end-of-options for the hostname, so a '-oProxyCommand=...' host would be parsed as an
+    # option. Real IPs/hostnames/paths never start with '-'.
+    if host.startswith("-") or user.startswith("-") or key.startswith("-"):
+        log("ir_remote: refusing option-shaped blaster host/user/key ({!r}/{!r})".format(host, user))
+        return None
     target = "{}@{}".format(user, host) if user else host
     args = ["ssh", "-o", "BatchMode=yes",
             "-o", "ConnectTimeout={}".format(int(getattr(config, "ir_blaster_connect_timeout", 8))),
             "-o", "StrictHostKeyChecking=accept-new"]
-    key = str(getattr(config, "ir_blaster_ssh_key", "") or "").strip()
     if key:
         args += ["-i", key]
     args += [target, "python3 -"]
@@ -145,15 +152,18 @@ class RemoteBlasterSwitcher:
         self._run = run or _default_run
 
     def to_oppo(self) -> bool:
-        args = ssh_args(self.config)
-        if args is None:
-            log("ir_remote: no ir_blaster_host configured; leaving the TV to be switched manually")
-            return False
-        program = build_program(self.config, input_sequence(self.config))
-        timeout = float(getattr(self.config, "ir_blaster_timeout", 20.0))
+        # The ENTIRE body is under the try: sequence/program building int()/float()s config values, and a
+        # corrupted runtime_config.json (from_dict does no coercion) could raise -- every failure must be
+        # non-fatal (the orchestrator fires this and ignores the result). Matches ir_zjiot's contract.
         try:
+            args = ssh_args(self.config)
+            if args is None:
+                log("ir_remote: no ir_blaster_host configured; leaving the TV to be switched manually")
+                return False
+            program = build_program(self.config, input_sequence(self.config))
+            timeout = float(getattr(self.config, "ir_blaster_timeout", 20.0))
             rc, err = self._run(args, program, timeout)
-        except Exception as exc:  # noqa: BLE001 -- ssh missing / host down / any failure is non-fatal
+        except Exception as exc:  # noqa: BLE001 -- ssh missing / host down / bad config / any failure
             log("ir_remote to_oppo failed (non-fatal): {}".format(exc))
             return False
         if rc != 0:

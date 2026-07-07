@@ -103,6 +103,24 @@ def test_to_oppo_exception_is_non_fatal_false():
     assert sw.to_oppo() is False
 
 
+def test_to_oppo_bad_config_value_is_non_fatal_false():
+    # a corrupted runtime_config.json (from_dict does no coercion) with a non-numeric port makes
+    # input_sequence()/build_program() int()/float() raise -- that must be caught, not propagated.
+    called = []
+    sw = ir_remote.RemoteBlasterSwitcher(
+        Config(ir_blaster_host="h", oppo_hdmi_port="not-a-number"), run=lambda *a: called.append(1) or (0, ""))
+    assert sw.to_oppo() is False   # returned False, did not raise
+    assert called == []            # never even reached the ssh run
+
+
+def test_ssh_args_rejects_option_shaped_values():
+    assert ir_remote.ssh_args(Config(ir_blaster_host="-oProxyCommand=id")) is None
+    assert ir_remote.ssh_args(Config(ir_blaster_host="h", ir_blaster_user="-x")) is None
+    assert ir_remote.ssh_args(Config(ir_blaster_host="h", ir_blaster_ssh_key="-k")) is None
+    # a normal host/user/key is unaffected
+    assert ir_remote.ssh_args(Config(ir_blaster_host="192.168.1.143", ir_blaster_user="pi")) is not None
+
+
 def test_to_kodi_delegates_to_cec_reclaim(monkeypatch):
     calls = []
     monkeypatch.setattr(ir_remote.cec, "reclaim_kodi", lambda c: calls.append("reclaim") or True)
