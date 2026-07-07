@@ -47,6 +47,9 @@ class Config:
     oppo_hdmi_port: int = 1                # which HDMI input the OPPO is on (1-4)
     tv_blaster_lirc_device: str = "/dev/lirc0"  # /dev/lirc TX node on the blaster
     tv_menu_anchor_ups: int = 4            # UP presses to park the picker on the top entry (anchor)
+    # Entries ABOVE HDMI1 in the input picker (e.g. a "Live TV"/"Antenna" row): the OPPO's port is then
+    # DOWN x (port-1+offset) from the anchored top, not DOWN x (port-1). 0 = the top entry IS HDMI1.
+    tv_menu_top_offset: int = 0
     tv_ir_key_delay: float = 0.7           # seconds between keypresses (TV must register each)
     tv_ir_reps: int = 3                    # frames per keypress (burst, like a held remote button)
     tv_ir_carrier: int = 38000             # RCA carrier (Hz)
@@ -175,6 +178,7 @@ def from_addon() -> "Config":
         oppo_hdmi_port=i("oppo_hdmi_port", 1),
         tv_blaster_lirc_device=s("tv_blaster_lirc_device") or "/dev/lirc0",
         tv_menu_anchor_ups=i("tv_menu_anchor_ups", 4),
+        tv_menu_top_offset=i("tv_menu_top_offset", 0),
         tv_ir_key_delay=f("tv_ir_key_delay", 0.7),
         tv_ir_reps=i("tv_ir_reps", 3),
         tv_rca_device=i("tv_rca_device", 15),

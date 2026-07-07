@@ -278,3 +278,7 @@ msgstr ""
 msgctxt "#30113"
 msgid "RCA command: OK / Enter"
 msgstr ""
+
+msgctxt "#30114"
+msgid "Input-menu entries above HDMI1 (e.g. a leading Live TV row)"
+msgstr ""

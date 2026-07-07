@@ -49,15 +49,17 @@ def rca_frame(device: int, command: int) -> list:
 def input_sequence(config) -> list:
     """The RCA commands to select the OPPO's HDMI input: INPUT, UP x anchor, DOWN x (port-1), OK.
 
-    The UP x anchor parks the highlight on the top entry (HDMI1) regardless of the input playback started
-    from, so the DOWN count is measured from a fixed origin -- deterministic."""
+    The UP x anchor parks the highlight on the top entry regardless of the input playback started from, so
+    the DOWN count is measured from a fixed origin -- deterministic. ``tv_menu_top_offset`` accounts for
+    entries ABOVE HDMI1 in the picker (e.g. a leading "Live TV" row): the OPPO is DOWN x (port-1+offset)."""
     port = min(4, max(1, int(getattr(config, "oppo_hdmi_port", 1) or 1)))
     ups = max(0, int(getattr(config, "tv_menu_anchor_ups", 4)))
+    offset = max(0, int(getattr(config, "tv_menu_top_offset", 0)))
     c_in = int(getattr(config, "tv_code_input", 163))
     c_up = int(getattr(config, "tv_code_up", 89))
     c_dn = int(getattr(config, "tv_code_down", 88))
     c_ok = int(getattr(config, "tv_code_ok", 244))
-    return [c_in] + [c_up] * ups + [c_dn] * (port - 1) + [c_ok]
+    return [c_in] + [c_up] * ups + [c_dn] * (port - 1 + offset) + [c_ok]
 
 
 # The generator that runs ON the blaster (fed to `python3 -` over SSH). It is `.format`-ed with only ints
