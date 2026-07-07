@@ -32,12 +32,31 @@ class Config:
     cec_reclaim_on_stop: bool = True
     grab_tv_on_play: bool = True
     # TV-switch transport (tvswitch.py). Default 'cec' = the existing HDMI-CEC path (zero regression).
-    tv_switch_method: str = "cec"          # none | cec | ir | lirc
+    tv_switch_method: str = "cec"          # none | cec | ir | lirc | ir_remote
     ir_serial_port: str = "/dev/ttyUSB0"   # ZJIoT serial IR module (method 'ir', Ugoos/CoreELEC)
     ir_serial_baud: int = 9600
     ir_lirc_device: str = "/dev/lirc0"     # kernel IR TX device (method 'lirc', Raspberry Pi 4)
     ir_code_oppo: str = ""                 # HDMI-input NEC code to switch the TV to the OPPO
     ir_code_kodi: str = ""                 # HDMI-input NEC code to switch the TV back to Kodi
+    # method 'ir_remote': an IR blaster on a SEPARATE host, reached over SSH. Play = drive the TV's input
+    # picker to the OPPO's HDMI port (RCA menu-nav; the panel has no discrete HDMI codes); stop = CEC
+    # reclaim. All hardware-validated 2026-07-08.
+    ir_blaster_host: str = ""              # blaster host (e.g. the Pi's IP); blank = transport disabled
+    ir_blaster_user: str = ""              # SSH user on the blaster (blank = ssh default)
+    ir_blaster_ssh_key: str = ""           # SSH identity file (blank = ssh default key)
+    oppo_hdmi_port: int = 1                # which HDMI input the OPPO is on (1-4)
+    tv_blaster_lirc_device: str = "/dev/lirc0"  # /dev/lirc TX node on the blaster
+    tv_menu_anchor_ups: int = 4            # UP presses to park the picker on the top entry (anchor)
+    tv_ir_key_delay: float = 0.7           # seconds between keypresses (TV must register each)
+    tv_ir_reps: int = 3                    # frames per keypress (burst, like a held remote button)
+    tv_ir_carrier: int = 38000             # RCA carrier (Hz)
+    tv_rca_device: int = 15                # RCA device/address (TCL = 15)
+    tv_code_input: int = 163               # RCA command: INPUT (open the input picker)
+    tv_code_up: int = 89                   # RCA command: UP
+    tv_code_down: int = 88                 # RCA command: DOWN
+    tv_code_ok: int = 244                  # RCA command: OK / ENTER
+    ir_blaster_timeout: float = 20.0       # overall SSH+sequence timeout (s)
+    ir_blaster_connect_timeout: int = 8    # SSH ConnectTimeout (s)
     oppo_hdmi_phys: str = "1.0.0.0"
     serial_control: bool = False
     serial_port: str = "/dev/ttyUSB0"
@@ -120,6 +139,13 @@ def from_addon() -> "Config":
         except Exception:
             return default
 
+    def f(key: str, default: float) -> float:
+        try:
+            raw = addon.getSetting(key)  # stored as a string; number control gives e.g. "0.7"
+            return float(raw) if raw else default
+        except Exception:
+            return default
+
     oppo_model = s("oppo_model", "M9205").strip().upper()
     return Config(
         oppo_ip=resolve_oppo_ip(oppo_model, s("oppo_ip")),
@@ -143,6 +169,19 @@ def from_addon() -> "Config":
         ir_lirc_device=s("ir_lirc_device") or "/dev/lirc0",
         ir_code_oppo=s("ir_code_oppo").strip(),
         ir_code_kodi=s("ir_code_kodi").strip(),
+        ir_blaster_host=s("ir_blaster_host").strip(),
+        ir_blaster_user=s("ir_blaster_user").strip(),
+        ir_blaster_ssh_key=s("ir_blaster_ssh_key").strip(),
+        oppo_hdmi_port=i("oppo_hdmi_port", 1),
+        tv_blaster_lirc_device=s("tv_blaster_lirc_device") or "/dev/lirc0",
+        tv_menu_anchor_ups=i("tv_menu_anchor_ups", 4),
+        tv_ir_key_delay=f("tv_ir_key_delay", 0.7),
+        tv_ir_reps=i("tv_ir_reps", 3),
+        tv_rca_device=i("tv_rca_device", 15),
+        tv_code_input=i("tv_code_input", 163),
+        tv_code_up=i("tv_code_up", 89),
+        tv_code_down=i("tv_code_down", 88),
+        tv_code_ok=i("tv_code_ok", 244),
         oppo_hdmi_phys=s("oppo_hdmi_phys") or "1.0.0.0",
         serial_control=b("serial_control", False),
         serial_port=s("serial_port") or "/dev/ttyUSB0",

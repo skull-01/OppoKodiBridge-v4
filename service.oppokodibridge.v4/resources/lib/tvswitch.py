@@ -2,10 +2,12 @@
 
 ``make_switcher(config, client)`` selects by ``config.tv_switch_method``:
 
-    none  -> NullSwitcher   (no-op; switch manually)
-    cec   -> CecSwitcher    (existing: OPPO One-Touch-Play grab + script.cecreclaim reclaim)
-    ir    -> ZjiotSwitcher  (ir_zjiot: serial IR module, Ugoos/CoreELEC host)
-    lirc  -> LircSwitcher   (ir_lirc: GPIO IR via ir-ctl, Raspberry Pi 4 host)
+    none       -> NullSwitcher   (no-op; switch manually)
+    cec        -> CecSwitcher    (existing: OPPO One-Touch-Play grab + script.cecreclaim reclaim)
+    ir         -> ZjiotSwitcher  (ir_zjiot: serial IR module, Ugoos/CoreELEC host)
+    lirc       -> LircSwitcher   (ir_lirc: GPIO IR via ir-ctl, on the LOCAL Kodi host)
+    ir_remote  -> RemoteBlasterSwitcher (ir_remote: IR blaster on a SEPARATE host over SSH to switch to
+                  the OPPO, plus the existing CEC reclaim to return to Kodi)
 
 Every switcher exposes ``to_oppo()`` (play-side) and ``to_kodi()`` (stop-side), each an honest bool,
 non-fatal, single-shot -- the same contract the CEC path has always had. The default 'cec' reproduces
@@ -66,4 +68,7 @@ def make_switcher(config, client=None):
     if method == "lirc":
         from .ir_lirc import LircSwitcher
         return LircSwitcher(config)
+    if method == "ir_remote":
+        from .ir_remote import RemoteBlasterSwitcher
+        return RemoteBlasterSwitcher(config)
     return CecSwitcher(config, client)  # default / 'cec'

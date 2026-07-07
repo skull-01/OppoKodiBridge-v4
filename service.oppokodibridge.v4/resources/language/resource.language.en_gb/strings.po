@@ -222,3 +222,59 @@ msgstr ""
 msgctxt "#30093"
 msgid "BDMV playback check (play a Blu-ray folder on the OPPO, detect it)"
 msgstr ""
+
+msgctxt "#30100"
+msgid "IR - remote blaster over SSH (Pi elsewhere; drives the TV input menu)"
+msgstr ""
+
+msgctxt "#30101"
+msgid "OPPO HDMI port on the TV (1-4)"
+msgstr ""
+
+msgctxt "#30102"
+msgid "IR blaster host (SSH address, e.g. 192.168.1.143)"
+msgstr ""
+
+msgctxt "#30103"
+msgid "IR blaster SSH user (e.g. pi)"
+msgstr ""
+
+msgctxt "#30104"
+msgid "IR blaster SSH identity file (blank = default key)"
+msgstr ""
+
+msgctxt "#30105"
+msgid "IR blaster LIRC device (e.g. /dev/lirc0)"
+msgstr ""
+
+msgctxt "#30106"
+msgid "Input-menu anchor: UP presses to reach the top entry"
+msgstr ""
+
+msgctxt "#30107"
+msgid "Delay between keypresses (seconds)"
+msgstr ""
+
+msgctxt "#30108"
+msgid "Frames per keypress (IR burst repeats)"
+msgstr ""
+
+msgctxt "#30109"
+msgid "TV RCA device/address (TCL = 15)"
+msgstr ""
+
+msgctxt "#30110"
+msgid "RCA command: INPUT / Source"
+msgstr ""
+
+msgctxt "#30111"
+msgid "RCA command: UP"
+msgstr ""
+
+msgctxt "#30112"
+msgid "RCA command: DOWN"
+msgstr ""
+
+msgctxt "#30113"
+msgid "RCA command: OK / Enter"
+msgstr ""
