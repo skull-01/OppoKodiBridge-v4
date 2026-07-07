@@ -1,6 +1,6 @@
 <svg width="816" height="564" viewBox="0 0 680 470" role="img" xmlns="http://www.w3.org/2000/svg">
   <title>Physical connection map from a Raspberry Pi 4 GPIO header to a transistor-driven IR LED</title>
-  <desc>The Pi 4 40-pin header is drawn as two rows of pins. Pin 4 (5V, red) feeds an IR LED; its cathode goes through a 68 ohm resistor to a 2N2222 transistor collector. Pin 12 (GPIO18, blue) drives the base through a 1k resistor. Pin 6 (GND) returns from the emitter.</desc>
+  <desc>The Pi 4 40-pin header is drawn as two rows of pins, even row (2-40) on top and odd row (1-39) on the bottom, with pin 1 at the bottom-left. Pin 4 (5V, red) on the top row feeds an IR LED; its cathode goes through a 68 ohm resistor to a 2N2222 transistor collector. Pin 12 (GPIO18, blue) drives the base through a 1k resistor. Pin 6 (GND) returns from the emitter.</desc>
   <style>
     text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
     .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
@@ -8,33 +8,35 @@
   <rect x="0" y="0" width="680" height="470" rx="14" fill="#ffffff" stroke="#e5e3dd" stroke-width="1"/>
 
   <text x="340" y="50" text-anchor="middle" font-size="16" font-weight="600" fill="#1c1917">Connection map &#8212; Raspberry Pi 4 header &#8594; IR LED</text>
-  <text x="340" y="72" text-anchor="middle" font-size="12" fill="#6b6760">Only 3 pins used &#183; all on the even (bottom) row</text>
+  <text x="340" y="72" text-anchor="middle" font-size="12" fill="#6b6760">Only 3 pins used &#183; all on the even (top) row</text>
 
   <rect x="48" y="98" width="584" height="90" rx="9" fill="#faf8f4" stroke="#d8d4cc" stroke-width="1.5"/>
-  <text x="60" y="90" class="mono" font-size="10" fill="#8a857c">GPIO header &#8212; top view &#183; &#9642; = pin 1</text>
-  <rect x="69" y="119" width="10" height="10" fill="#ffffff" stroke="#b8b3aa" stroke-width="1.4"/>
+  <text x="60" y="90" class="mono" font-size="10" fill="#8a857c">GPIO header &#8212; top view &#183; &#9642; = pin 1 (bottom-left) &#183; even pins 2-40 on the top row</text>
 
   <g fill="#ffffff" stroke="#d8d4cc" stroke-width="1.2">
-    <circle cx="102" cy="124" r="5"/><circle cx="130" cy="124" r="5"/><circle cx="158" cy="124" r="5"/><circle cx="186" cy="124" r="5"/><circle cx="214" cy="124" r="5"/><circle cx="242" cy="124" r="5"/><circle cx="270" cy="124" r="5"/><circle cx="298" cy="124" r="5"/><circle cx="326" cy="124" r="5"/><circle cx="354" cy="124" r="5"/><circle cx="382" cy="124" r="5"/><circle cx="410" cy="124" r="5"/><circle cx="438" cy="124" r="5"/><circle cx="466" cy="124" r="5"/><circle cx="494" cy="124" r="5"/><circle cx="522" cy="124" r="5"/><circle cx="550" cy="124" r="5"/><circle cx="578" cy="124" r="5"/><circle cx="606" cy="124" r="5"/>
-    <circle cx="158" cy="156" r="5"/><circle cx="186" cy="156" r="5"/><circle cx="242" cy="156" r="5"/><circle cx="270" cy="156" r="5"/><circle cx="298" cy="156" r="5"/><circle cx="326" cy="156" r="5"/><circle cx="354" cy="156" r="5"/><circle cx="382" cy="156" r="5"/><circle cx="410" cy="156" r="5"/><circle cx="438" cy="156" r="5"/><circle cx="466" cy="156" r="5"/><circle cx="494" cy="156" r="5"/><circle cx="522" cy="156" r="5"/><circle cx="550" cy="156" r="5"/><circle cx="578" cy="156" r="5"/><circle cx="606" cy="156" r="5"/>
+    <circle cx="74" cy="124" r="5"/><circle cx="158" cy="124" r="5"/><circle cx="186" cy="124" r="5"/><circle cx="242" cy="124" r="5"/><circle cx="270" cy="124" r="5"/><circle cx="298" cy="124" r="5"/><circle cx="326" cy="124" r="5"/><circle cx="354" cy="124" r="5"/><circle cx="382" cy="124" r="5"/><circle cx="410" cy="124" r="5"/><circle cx="438" cy="124" r="5"/><circle cx="466" cy="124" r="5"/><circle cx="494" cy="124" r="5"/><circle cx="522" cy="124" r="5"/><circle cx="550" cy="124" r="5"/><circle cx="578" cy="124" r="5"/><circle cx="606" cy="124" r="5"/>
+    <circle cx="102" cy="156" r="5"/><circle cx="130" cy="156" r="5"/><circle cx="158" cy="156" r="5"/><circle cx="186" cy="156" r="5"/><circle cx="214" cy="156" r="5"/><circle cx="242" cy="156" r="5"/><circle cx="270" cy="156" r="5"/><circle cx="298" cy="156" r="5"/><circle cx="326" cy="156" r="5"/><circle cx="354" cy="156" r="5"/><circle cx="382" cy="156" r="5"/><circle cx="410" cy="156" r="5"/><circle cx="438" cy="156" r="5"/><circle cx="466" cy="156" r="5"/><circle cx="494" cy="156" r="5"/><circle cx="522" cy="156" r="5"/><circle cx="550" cy="156" r="5"/><circle cx="578" cy="156" r="5"/><circle cx="606" cy="156" r="5"/>
   </g>
+  <rect x="69" y="151" width="10" height="10" fill="#ffffff" stroke="#b8b3aa" stroke-width="1.4"/>
 
-  <circle cx="102" cy="156" r="8" fill="#e8633a" stroke="#ffffff" stroke-width="1.5"/>
-  <circle cx="130" cy="156" r="8" fill="#292524" stroke="#ffffff" stroke-width="1.5"/>
-  <circle cx="214" cy="156" r="8" fill="#3b7ff5" stroke="#ffffff" stroke-width="1.5"/>
-  <text x="102" y="180" text-anchor="middle" class="mono" font-size="10" fill="#8a857c">4</text>
-  <text x="130" y="180" text-anchor="middle" class="mono" font-size="10" fill="#8a857c">6</text>
-  <text x="214" y="180" text-anchor="middle" class="mono" font-size="10" fill="#8a857c">12</text>
+  <circle cx="102" cy="124" r="8" fill="#e8633a" stroke="#ffffff" stroke-width="1.5"/>
+  <circle cx="130" cy="124" r="8" fill="#292524" stroke="#ffffff" stroke-width="1.5"/>
+  <circle cx="214" cy="124" r="8" fill="#3b7ff5" stroke="#ffffff" stroke-width="1.5"/>
+  <text x="74" y="112" text-anchor="middle" class="mono" font-size="10" fill="#8a857c">2</text>
+  <text x="102" y="112" text-anchor="middle" class="mono" font-size="10" fill="#8a857c">4</text>
+  <text x="130" y="112" text-anchor="middle" class="mono" font-size="10" fill="#8a857c">6</text>
+  <text x="214" y="112" text-anchor="middle" class="mono" font-size="10" fill="#8a857c">12</text>
+  <text x="74" y="180" text-anchor="middle" class="mono" font-size="10" fill="#8a857c">1</text>
 
-  <path d="M102,156 V250 H124 Q130,243 136,250 H208 Q214,243 220,250 H430 V262" fill="none" stroke="#e8633a" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
-  <text x="88" y="232" text-anchor="end" font-size="11" fill="#b23c14">5 V</text>
+  <path d="M102,132 V140 H88 V250 H110 Q116,243 122,250 H194 Q200,243 206,250 H430 V262" fill="none" stroke="#e8633a" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="80" y="232" text-anchor="end" font-size="11" fill="#b23c14">5 V</text>
 
-  <path d="M214,156 V372 H360" fill="none" stroke="#3b7ff5" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M214,132 V140 H200 V372 H360" fill="none" stroke="#3b7ff5" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
   <path d="M405,372 H416" fill="none" stroke="#3b7ff5" stroke-width="2.6" stroke-linecap="round"/>
-  <text x="224" y="356" font-size="11" fill="#1b4fb3">GPIO18</text>
+  <text x="210" y="356" font-size="11" fill="#1b4fb3">GPIO18</text>
 
-  <path d="M430,398 V414 H130 V156" fill="none" stroke="#292524" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
-  <text x="120" y="300" text-anchor="end" font-size="11" fill="#292524">GND</text>
+  <path d="M430,398 V414 H116 V140 H130 V132" fill="none" stroke="#292524" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="124" y="300" font-size="11" fill="#292524">GND</text>
 
   <polygon points="418,262 442,262 430,286" fill="#ffffff" stroke="#292524" stroke-width="2"/>
   <line x1="416" y1="286" x2="444" y2="286" stroke="#292524" stroke-width="2.4" stroke-linecap="round"/>
