@@ -164,3 +164,22 @@ Dev tools: #36–#40. All implemented in `0619b70`. **Released in [v4.3.1](https
 | 44 | [#38](https://github.com/skull-01/OppoKodiBridge-v4/issues/38) `0619b70` | **Provisioner (needs a Pi):** `sudo python3 tools/setup_rpi4_lirc.py --apply`, then re-run with `--with-receiver`. | `config.txt` is never left truncated (atomic write); `.okb-bak` keeps the **pristine** original across both runs; an apt failure aborts before patching and prints the real error. |
 | 45 | [#39](https://github.com/skull-01/OppoKodiBridge-v4/issues/39) `0619b70` | **ZJIoT console (needs the module):** enter a slot index > 255; send/learn over a noisy line. | Out-of-range slot shows an error dialog (does **not** blast the wrong slot); a stray serial byte no longer permanently loses replies. |
 | 46 | [#40](https://github.com/skull-01/OppoKodiBridge-v4/issues/40) `0619b70` | **LIRC console (needs a Pi + RX):** run the loopback self-test with the RX unplugged. | The FAIL now names the **capture error** instead of a bare "FAIL". (Raw-carrier persistence is a documented follow-up; NEC codes unaffected.) |
+
+---
+
+## ir_remote transport — v4.4.0 (#41 / #23 / #26)
+
+Off-box suite: **293 passed** (was 277; +16). Built under Protocol 1; independent **3-agent adversarial
+re-audit** (security / zero-regression / correctness) — one MED (non-fatal contract: to_oppo body now
+fully under try) + one LOW (SSH option-shape guard) found and fixed, then clean. Default `cec` and the
+other transports are byte-for-byte unchanged. Implemented on `feat/ir-remote-blaster`, merged to `main`
+@ `85faa05`, **released [v4.4.0](https://github.com/skull-01/OppoKodiBridge-v4/releases/tag/v4.4.0)**.
+**Deployed live** to the Ugoos (CoreELEC 192.168.1.100): add-on + `script.cecreclaim` installed + enabled,
+service running, `runtime_config.json` shows `tv_switch_method=ir_remote`, `oppo_hdmi_port=3`,
+`ir_blaster_host=192.168.1.143`, `ir_blaster_user=ri-g`; passwordless SSH key Ugoos→Pi authorized.
+
+| # | Issue / SHA | Check | What you should see |
+|---|-------------|-------|---------------------|
+| 47 | [#41](https://github.com/skull-01/OppoKodiBridge-v4/issues/41) `85faa05` | **IR forward switch (hardware):** play a disc/ISO through Kodi on the Ugoos with `tv_switch_method=ir_remote`, OPPO on HDMI3. | The TV switches to the OPPO (HDMI3) via the blaster — Ugoos SSHes the Pi, which fires `INPUT→UP×4→DOWN×2→OK`. (The Ugoos→Pi→IR→TV chain was already confirmed live.) |
+| 48 | [#23](https://github.com/skull-01/OppoKodiBridge-v4/issues/23) / [#26](https://github.com/skull-01/OppoKodiBridge-v4/issues/26) `85faa05` | **CEC reclaim return:** end playback. ⚠️ Needs Kodi's **web server ON** (Settings → Services → Control → *Allow remote control via HTTP*) — it was OFF/would-not-bind on the deploy box. | The TV returns to Kodi via the existing `script.cecreclaim`. If it doesn't, enable the web server (that path uses localhost JSON-RPC on port 8080). |
+| 49 | [#41](https://github.com/skull-01/OppoKodiBridge-v4/issues/41) `8df2ae2` | **Non-fatal contract (software):** covered off-box — a bad blaster host / corrupt config / ssh-down never breaks playback. | The OPPO still plays; a switch failure only logs. |
