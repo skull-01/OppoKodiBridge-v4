@@ -237,6 +237,17 @@
             <heading>30106</heading>
           </control>
         </setting>
+        <setting id="tv_menu_top_offset" type="integer" label="30114">
+          <level>2</level>
+          <default>0</default>
+          <constraints>
+            <minimum>0</minimum>
+            <maximum>6</maximum>
+          </constraints>
+          <control type="edit" format="integer">
+            <heading>30114</heading>
+          </control>
+        </setting>
         <setting id="tv_ir_key_delay" type="number" label="30107">
           <level>2</level>
           <default>0.7</default>

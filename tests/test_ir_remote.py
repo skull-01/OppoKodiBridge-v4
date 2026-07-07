@@ -42,6 +42,15 @@ def test_input_sequence_clamps_port_and_honours_overrides():
     assert seq == [1, 2, 2, 3, 4]
 
 
+def test_input_sequence_top_offset_adds_downs_for_leading_menu_entry():
+    # a leading entry above HDMI1 -> OPPO on HDMI3 is DOWN x (3-1+1) = DOWN x 3 (the operator's TCL menu).
+    assert ir_remote.input_sequence(Config(oppo_hdmi_port=3, tv_menu_top_offset=1)) == \
+        [163, 89, 89, 89, 89, 88, 88, 88, 244]
+    # default offset 0 is unchanged (HDMI1 is the top entry).
+    assert ir_remote.input_sequence(Config(oppo_hdmi_port=3, tv_menu_top_offset=0)) == \
+        [163, 89, 89, 89, 89, 88, 88, 244]
+
+
 def test_build_program_is_valid_python_and_embeds_the_commands():
     cmds = ir_remote.input_sequence(Config(oppo_hdmi_port=3))
     prog = ir_remote.build_program(Config(tv_blaster_lirc_device="/dev/lirc0"), cmds)
