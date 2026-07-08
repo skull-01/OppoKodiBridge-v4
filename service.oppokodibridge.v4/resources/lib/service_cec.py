@@ -119,6 +119,16 @@ def _maybe_launch_first_run_wizard() -> None:
     xbmc.executebuiltin("RunScript(special://home/addons/{}/wizard.py,firstrun)".format(ADDON_ID))
 
 
+def _passthrough_enabled() -> bool:
+    """Cheap single-flag read so the DEFAULT-OFF loop stays light (no full config build per tick)."""
+    import xbmcaddon
+
+    try:
+        return bool(xbmcaddon.Addon(ADDON_ID).getSettingBool("remote_passthrough_enabled"))
+    except Exception:  # pragma: no cover - hardware path
+        return False
+
+
 def main() -> None:
     import xbmc
 
@@ -142,9 +152,34 @@ def main() -> None:
     # JSON-RPC (cec.reclaim_kodi -> script.cecreclaim) when the handoff ends. This service only
     # installs the playercorefactory.xml and publishes the resolved config, then idles.
     monitor = _Monitor()
+
+    # Remote passthrough (default-off): when enabled, poll the OPPO's playback state and open/close a
+    # key-forwarding dialog around a playing disc. Lazy import -- passthrough_ui pulls in xbmcgui, which
+    # must only load inside a running Kodi. A failure here is non-fatal: the handoff service still runs.
+    runner = None
+    try:
+        from .passthrough_ui import PassthroughRunner
+
+        runner = PassthroughRunner()
+    except Exception as exc:  # pragma: no cover - hardware path
+        log("passthrough runner unavailable (non-fatal): {!r}".format(exc))
+
     while not monitor.abortRequested():
-        if monitor.waitForAbort(5):
+        interval = 5
+        if runner is not None and _passthrough_enabled():
+            cfg = config_mod.from_addon()
+            try:
+                runner.tick(cfg)
+            except Exception as exc:  # pragma: no cover - hardware path
+                log("passthrough tick error (non-fatal): {!r}".format(exc))
+            interval = max(2, int(getattr(cfg, "passthrough_poll_interval", 4) or 4))
+        elif runner is not None:
+            runner.shutdown()
+        if monitor.waitForAbort(interval):
             break
+
+    if runner is not None:
+        runner.shutdown()
     # Do NOT remove playercorefactory.xml on shutdown: Kodi loads it at STARTUP, before this service
     # runs, so the file must already be on disk at boot -> it has to persist across restarts. It is
     # removed only when the handoff is turned off (in _install_pcf). After a fresh install, Kodi must

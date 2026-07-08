@@ -76,6 +76,13 @@ class Config:
     kodi_rpc_port: int = 8080
     kodi_rpc_user: str = ""
     kodi_rpc_pass: str = ""
+    # Remote passthrough: while a handed-off disc plays on the OPPO, forward the Kodi remote's keys to
+    # the OPPO (/sendremotekey) so the user can drive the disc menu. DEFAULT OFF = zero regression.
+    remote_passthrough_enabled: bool = False
+    # Optional JSON {button_code: "OPPO_CODE"} to fix/extend the built-in key map without a code change
+    # (button code = 0xF000 | XBMCKey; see passthrough.py). Blank = built-in map only.
+    passthrough_key_overrides: str = ""
+    passthrough_poll_interval: float = 4.0  # seconds between OPPO-state polls while armed (internal)
 
     @property
     def configured(self) -> bool:
@@ -193,4 +200,7 @@ def from_addon() -> "Config":
         kodi_rpc_port=i("kodi_rpc_port", 8080),
         kodi_rpc_user=s("kodi_rpc_user").strip(),
         kodi_rpc_pass=s("kodi_rpc_pass").strip(),
+        remote_passthrough_enabled=b("remote_passthrough_enabled", False),
+        passthrough_key_overrides=s("passthrough_key_overrides").strip(),
+        passthrough_poll_interval=f("passthrough_poll_interval", 4.0),
     )
