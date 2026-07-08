@@ -530,10 +530,19 @@ class OppoClient:
         endpoint = "/playnormalfile?{" + urllib.parse.quote(inner) + "}"
         return self._get_json(endpoint, timeout=PLAY_TIMEOUT)
 
+    def send_remote_key(self, key: str) -> dict:
+        """Forward one remote-control key to the OPPO over the app API (``/sendremotekey``).
+
+        ``key`` is an OPPO OREMOTE code -- the RS-232 3-letter command with the leading ``#`` removed
+        (e.g. NUP/NDN/NLT/NRT arrows, SEL enter, PLA/PAU/STP transport, OSD info). This is the same
+        channel ``stop()`` uses; while a disc is playing the :436 session is already awake, so this is
+        a plain, fast GET (no wake/handshake per press). Returns the parsed reply."""
+        return self._get_json("/sendremotekey?" + urllib.parse.quote('{"key":"%s"}' % key))
+
     def stop(self) -> dict:
         """Send STOP via the app API (/sendremotekey STP) -- clears any prior playback before loading
         new media (sent ahead of an ISO open, reference-aligned)."""
-        return self._get_json("/sendremotekey?" + urllib.parse.quote('{"key":"STP"}'))
+        return self.send_remote_key("STP")
 
     def play_bdmv(self, disc_folder_name: str, nfs: bool = True) -> dict:
         """Play a Blu-ray disc FOLDER (one containing BDMV). On this OPPO ``/checkfolderhasBDMV``

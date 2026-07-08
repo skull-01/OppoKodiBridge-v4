@@ -327,6 +327,33 @@
         </setting>
       </group>
     </category>
+    <category id="passthrough" label="30115">
+      <group id="1">
+        <setting id="remote_passthrough_enabled" type="boolean" label="30116">
+          <level>0</level>
+          <default>false</default>
+          <control type="toggle"/>
+        </setting>
+        <setting id="passthrough_key_overrides" type="string" label="30117">
+          <level>2</level>
+          <default></default>
+          <control type="edit" format="string">
+            <heading>30117</heading>
+          </control>
+        </setting>
+        <setting id="passthrough_poll_interval" type="number" label="30118">
+          <level>2</level>
+          <default>4.0</default>
+          <constraints>
+            <minimum>2.0</minimum>
+            <maximum>15.0</maximum>
+          </constraints>
+          <control type="edit" format="number">
+            <heading>30118</heading>
+          </control>
+        </setting>
+      </group>
+    </category>
     <category id="serial" label="30050">
       <group id="1">
         <setting id="serial_control" type="boolean" label="30051">
