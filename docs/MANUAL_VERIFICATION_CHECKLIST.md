@@ -183,3 +183,24 @@ service running, `runtime_config.json` shows `tv_switch_method=ir_remote`, `oppo
 | 47 | [#41](https://github.com/skull-01/OppoKodiBridge-v4/issues/41) `ff07af9` (v4.4.1) | **IR forward switch (hardware):** play a disc/ISO through Kodi on the Ugoos with `tv_switch_method=ir_remote`, OPPO on HDMI3 (`oppo_hdmi_port=3`, `tv_menu_top_offset=1`). | The TV switches to the OPPO (HDMI3) via the blaster — Ugoos SSHes the Pi, which fires `INPUT→UP×4→DOWN×3→OK`. **Confirmed live 2026-07-08** firing the deployed sequence (the menu has a leading entry above HDMI1 → offset=1, so 3 downs not 2). |
 | 48 | [#23](https://github.com/skull-01/OppoKodiBridge-v4/issues/23) / [#26](https://github.com/skull-01/OppoKodiBridge-v4/issues/26) `85faa05` | **CEC reclaim return:** end playback. ⚠️ Needs Kodi's **web server ON** (Settings → Services → Control → *Allow remote control via HTTP*) — it was OFF/would-not-bind on the deploy box. | The TV returns to Kodi via the existing `script.cecreclaim`. If it doesn't, enable the web server (that path uses localhost JSON-RPC on port 8080). |
 | 49 | [#41](https://github.com/skull-01/OppoKodiBridge-v4/issues/41) `8df2ae2` | **Non-fatal contract (software):** covered off-box — a bad blaster host / corrupt config / ssh-down never breaks playback. | The OPPO still plays; a switch failure only logs. |
+
+---
+
+## remote passthrough — v4.5.0 (#42)
+
+Off-box suite: **307 passed** (+13). Built under Protocol 1; independent **3-agent adversarial re-audit**
+(correctness / zero-regression / Kodi-runtime, source-verified) caught + fixed a wrong Kodi button-code
+derivation (codes are `0xF000|XBMCKey`, not `|Windows-VK`: Delete/Menu differed), a re-arm loop that
+defeated the armed-time ceiling, a worker-thread leak, and an unbounded forward queue — then clean. The
+zero-regression audit PASSED (default `cec`/handoff path byte-for-byte unchanged; `stop()` byte-identical).
+Implemented on `feat/remote-passthrough` (`6e27f86` + `d350b2b`), merged to `main` @ `4f1b82e`,
+**released [v4.5.0](https://github.com/skull-01/OppoKodiBridge-v4/releases/tag/v4.5.0)**. **Deployed live** to
+the Ugoos (CoreELEC 192.168.1.100): add-on 4.5.0 installed, `remote_passthrough_enabled=true` in the
+published `runtime_config.json`, service running, web server confirmed healthy (JSON-RPC 200, `kodi:1234`).
+
+| # | Issue / SHA | Check | What you should see |
+|---|-------------|-------|---------------------|
+| 50 | [#42](https://github.com/skull-01/OppoKodiBridge-v4/issues/42) `6e27f86` | **Capture (hardware, the #1 risk):** play a disc/ISO through Kodi; once it's on the OPPO, press an arrow / OK on the Kodi remote. | The OPPO's disc menu moves — confirms the in-Kodi WindowDialog captures keys during external-player playback. |
+| 51 | [#42](https://github.com/skull-01/OppoKodiBridge-v4/issues/42) `d350b2b` | **Button-code capture:** press each of the 8 buttons, then `grep passthrough /storage/.kodi/temp/kodi.log`. | Each mapped key logs `action=.. button=.. -> <CODE>`; an `UNMAPPED action=.. button=<n>` line = a key whose real code differs — add `"<n>": "<CODE>"` to `passthrough_key_overrides`. Arrows/OK should work at once; transport/media codes are best-effort and may need overrides. |
+| 52 | [#42](https://github.com/skull-01/OppoKodiBridge-v4/issues/42) `6e27f86` | **Play/Pause + Stop:** press Play/Pause, then Stop. | `PAU` toggles play↔pause on the OPPO; `STP` ends the disc → OPPO idle → dialog closes → CEC returns the TV to Kodi. Confirms PAU-toggles-on-M9207 and the regain-the-remote path. |
+| 53 | [#42](https://github.com/skull-01/OppoKodiBridge-v4/issues/42) `d350b2b` | **Trap backstop:** while a disc plays, all keys go to the OPPO (you can't drive Kodi — intended). If the OPPO wedges, the dialog auto-closes at the armed-time ceiling (~6h); `systemctl restart kodi` over SSH is the manual escape. | Kodi control returns when the disc ends. A local escape key is a documented follow-up. |
