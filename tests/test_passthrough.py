@@ -12,14 +12,21 @@ def test_nav_and_select_by_action_id():
 
 
 def test_repurposed_keys_by_button_code():
-    assert pt.resolve(0, VKEY | 0x08) == "PAU"   # BackSpace -> Play/Pause
-    assert pt.resolve(0, VKEY | 0x2E) == "STP"   # Delete -> Stop
-    assert pt.resolve(0, VKEY | 0xA6) == "RET"   # browser-back -> Return
-    assert pt.resolve(0, VKEY | 0x5D) == "SUB"   # Apps -> Subtitle
-    assert pt.resolve(0, VKEY | 0xAC) == "AUD"   # browser-home -> Audio
-    assert pt.resolve(0, VKEY | 0xAF) == "VUP"   # volume up
-    assert pt.resolve(0, VKEY | 0xAE) == "VDN"   # volume down
-    assert pt.resolve(0, VKEY | 0xAD) == "OSD"   # mute key -> Info
+    assert pt.resolve(0, VKEY | 0x08) == "PAU"    # BackSpace -> Play/Pause
+    assert pt.resolve(0, VKEY | 0x7F) == "STP"    # Delete (XBMCK_DELETE 0x7F) -> Stop
+    assert pt.resolve(0, VKEY | 0xA6) == "RET"    # browser-back -> Return
+    assert pt.resolve(0, VKEY | 0x13F) == "SUB"   # Apps/menu (XBMCK_MENU 0x13F) -> Subtitle
+    assert pt.resolve(0, VKEY | 0xAC) == "AUD"    # browser-home -> Audio
+    assert pt.resolve(0, VKEY | 0xAF) == "VUP"    # volume up
+    assert pt.resolve(0, VKEY | 0xAE) == "VDN"    # volume down
+    assert pt.resolve(0, VKEY | 0xAD) == "OSD"    # mute key -> Info
+
+
+def test_old_windows_vk_codes_are_not_mapped():
+    # Kodi button code is 0xF000|XBMCKey, not 0xF000|Windows-VK: the VK-derived Delete(0x2E)/Apps(0x5D)
+    # must NOT resolve (they were the audit-caught bug).
+    assert pt.resolve(0, VKEY | 0x2E) is None
+    assert pt.resolve(0, VKEY | 0x5D) is None
 
 
 def test_button_code_beats_colliding_action():
@@ -45,6 +52,9 @@ def test_parse_overrides_is_lenient():
     assert pt.parse_overrides("not json") == {}
     assert pt.parse_overrides("[1,2,3]") == {}
     assert pt.parse_overrides('{"61448": "PAU"}') == {61448: "PAU"}
+    # null / numeric / empty override VALUES are skipped (no bogus "None"/"5"/"" forwarded key)
+    assert pt.parse_overrides('{"61448": null, "100": 5, "200": ""}') == {}
+    assert pt.parse_overrides('{"61448": " PAU ", "9": null}') == {61448: "PAU"}
 
 
 def test_maps_are_consistent():

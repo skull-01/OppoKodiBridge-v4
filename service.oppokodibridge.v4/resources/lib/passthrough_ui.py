@@ -39,7 +39,9 @@ class PassthroughDialog(xbmcgui.WindowDialog):
         super().__init__()
         self._overrides = passthrough.parse_overrides(getattr(config, "passthrough_key_overrides", ""))
         self._client = OppoClient(config)
-        self._q: "queue.Queue" = queue.Queue()
+        # Bounded so a slow/unreachable OPPO can't back up a burst of STALE presses that later replay
+        # and jump the disc menu; drop-on-full (newest presses matter more than a stale backlog).
+        self._q: "queue.Queue" = queue.Queue(maxsize=8)
         self._stop = threading.Event()
         self._worker = threading.Thread(target=self._pump, name="okb-passthrough", daemon=True)
         self._worker.start()
@@ -59,8 +61,11 @@ class PassthroughDialog(xbmcgui.WindowDialog):
         except Exception as exc:  # noqa: BLE001
             log("passthrough: resolve error (non-fatal): {!r}".format(exc))
         if code:
-            self._q.put(code)
-            log("passthrough: action={} button={} -> {}".format(action.getId(), button, code))
+            try:
+                self._q.put_nowait(code)
+                log("passthrough: action={} button={} -> {}".format(action.getId(), button, code))
+            except queue.Full:
+                log("passthrough: queue full; dropping {} (OPPO slow/unreachable)".format(code))
         else:
             log("passthrough: UNMAPPED action={} button={} (add to passthrough_key_overrides if wanted)"
                 .format(action.getId(), button))
@@ -92,6 +97,7 @@ class PassthroughRunner:
         self._armed = False
         self._idle = 0
         self._armed_polls = 0
+        self._gave_up = False  # ceiling tripped: refuse to re-arm until a real (non-active) stop
 
     def _probe(self, config) -> str:
         """``playing`` / ``paused`` / ``idle`` / ``down`` -- a fast port gate first so an asleep/absent
@@ -107,21 +113,40 @@ class PassthroughRunner:
 
     def tick(self, config) -> None:
         if not (getattr(config, "remote_passthrough_enabled", False) and getattr(config, "configured", False)):
+            self._gave_up = False
             self.shutdown()
             return
         idle_needed = max(1, int(getattr(config, "idle_confirmations", 2)))
         state = self._probe(config)
+
+        # A real stop (any non-active read) clears the give-up latch, so a genuinely-new disc can arm.
+        if state not in passthrough.ACTIVE_STATES:
+            self._gave_up = False
+        if self._gave_up:
+            # ceiling already tripped and the OPPO is STILL claiming active -> do not hand the remote
+            # back over; stay closed until a genuine stop is observed above.
+            if self._dialog is not None:
+                self._close()
+            self._armed = False
+            return
+
         armed, self._idle = passthrough.arm_decision(self._armed, state, self._idle, idle_needed)
 
         # absolute armed-time ceiling: never leave the remote "handed over" forever if stop detection
-        # somehow never fires (mirrors monitor.max_watch_seconds).
+        # somehow never fires (mirrors monitor.max_watch_seconds). Latched so it can't immediately
+        # re-arm on the next tick while the OPPO keeps (wrongly) reporting playback.
         interval = max(2.0, float(getattr(config, "passthrough_poll_interval", 4.0)))
         max_polls = max(1, int(float(getattr(config, "max_watch_seconds", 21600.0)) / interval))
         if armed:
             self._armed_polls += 1
             if self._armed_polls >= max_polls:
-                log("passthrough: hit the armed-time ceiling; closing so Kodi control returns.")
-                self.shutdown()
+                log("passthrough: hit the armed-time ceiling; closing and refusing to re-arm until the "
+                    "OPPO reports a real stop.")
+                self._gave_up = True
+                self._armed = False
+                self._armed_polls = 0
+                self._idle = 0
+                self._close()
                 return
         else:
             self._armed_polls = 0
@@ -133,12 +158,20 @@ class PassthroughRunner:
         self._armed = armed
 
     def _open(self, config) -> None:
+        dlg = None
         try:
-            self._dialog = PassthroughDialog(config)
-            self._dialog.show()
+            dlg = PassthroughDialog(config)  # constructor starts the worker thread
+            dlg.show()
+            self._dialog = dlg
             log("passthrough: ARMED (disc playing) -- forwarding remote keys to the OPPO.")
         except Exception as exc:  # noqa: BLE001
             log("passthrough: open failed (non-fatal): {!r}".format(exc))
+            if dlg is not None:  # tear down the worker thread we already started, or it leaks
+                try:
+                    dlg.shutdown()
+                    dlg.close()
+                except Exception:  # noqa: BLE001
+                    pass
             self._dialog = None
 
     def _close(self) -> None:

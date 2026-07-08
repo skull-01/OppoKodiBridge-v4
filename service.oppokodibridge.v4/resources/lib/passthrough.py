@@ -13,10 +13,14 @@ Resolution has two layers, checked in order (overrides -> button code -> action 
   sends browser-back; Kodi turns BOTH into ACTION_NAV_BACK, so an action-id map cannot tell them apart.
   The button code identifies the physical key, so those are matched by button code.
 
-Kodi's keyboard button code for a virtual key is ``0xF000 | <Windows virtual-key code>``. The VK codes
-below were captured from the operator's actual remote with the Windows key-capture tool, so the button
-codes are derived, not guessed -- and the first on-device run logs any miss, which a config override
-(``passthrough_key_overrides``) can correct without a code change.
+Kodi's keyboard button code is ``0xF000 | XBMCKey`` (an SDL-style keysym enum) -- NOT the Windows
+virtual-key code. The VK codes captured from the operator's remote with the Windows tool identify the
+PHYSICAL key; XBMCKey equals the VK across the ASCII range and the multimedia/browser block 0xA6-0xBB
+(so browser-back/home, volume, mute and BackSpace line up), but differs elsewhere (Delete = 0x7F not
+the VK 0x2E; Menu = 0x13F not the VK 0x5D) -- those are translated below. These are best-effort
+predictions for an evdev-keyboard remote; a CEC/lirc remote uses a different code space. The first
+on-device run logs any miss (``passthrough: UNMAPPED ... button=<n>``); a ``passthrough_key_overrides``
+JSON entry corrects it with no code change.
 """
 from __future__ import annotations
 
@@ -25,27 +29,30 @@ from typing import Dict, Optional
 
 VKEY_BASE = 0xF000  # Kodi keyboard button code = 0xF000 | Windows virtual-key code
 
-# (label, kodi_action_id_or_None, windows_vk, oppo_code). Operator's remote + chosen OPPO codes:
-#   arrows/enter -> matched by action id (no collision); everything else by button code.
+# (label, kodi_action_id_or_None, code_key, oppo_code). Arrows/enter -> matched by ACTION ID (no
+# collision, reliable); the repurposed keys (action_id=None) -> matched by BUTTON CODE = 0xF000|code_key
+# where code_key is the XBMCKey (see docstring: usually == the Windows VK, but Delete/Menu differ).
 _KEYS = (
-    ("Up",         3,    0x26, "NUP"),
-    ("Down",       4,    0x28, "NDN"),
-    ("Left",       1,    0x25, "NLT"),
-    ("Right",      2,    0x27, "NRT"),
-    ("Enter/OK",   7,    0x0D, "SEL"),
-    ("Play/Pause", None, 0x08, "PAU"),  # BackSpace -- OPPO PAU toggles play<->pause itself
-    ("Stop",       None, 0x2E, "STP"),  # Delete
-    ("Back",       None, 0xA6, "RET"),  # browser-back
-    ("Subtitle",   None, 0x5D, "SUB"),  # Apps / menu key
-    ("Audio",      None, 0xAC, "AUD"),  # browser-home
-    ("Volume+",    None, 0xAF, "VUP"),
-    ("Volume-",    None, 0xAE, "VDN"),
-    ("Info",       None, 0xAD, "OSD"),  # mute key -> Info/OSD overlay (operator's choice)
+    ("Up",         3,    0x26,  "NUP"),
+    ("Down",       4,    0x28,  "NDN"),
+    ("Left",       1,    0x25,  "NLT"),
+    ("Right",      2,    0x27,  "NRT"),
+    ("Enter/OK",   7,    0x0D,  "SEL"),
+    ("Play/Pause", None, 0x08,  "PAU"),  # BackSpace -- OPPO PAU toggles play<->pause itself
+    ("Stop",       None, 0x7F,  "STP"),  # Delete = XBMCK_DELETE 0x7F (NOT the VK 0x2E)
+    ("Back",       None, 0xA6,  "RET"),  # browser-back (XBMCK == VK here)
+    ("Subtitle",   None, 0x13F, "SUB"),  # Apps/menu = XBMCK_MENU 0x13F (NOT the VK 0x5D)
+    ("Audio",      None, 0xAC,  "AUD"),  # browser-home
+    ("Volume+",    None, 0xAF,  "VUP"),
+    ("Volume-",    None, 0xAE,  "VDN"),
+    ("Info",       None, 0xAD,  "OSD"),  # mute key -> Info/OSD overlay (operator's choice)
 )
 
-CODE_BY_ACTION: Dict[int, str] = {a: c for (_l, a, _vk, c) in _KEYS if a is not None}
-CODE_BY_BUTTONCODE: Dict[int, str] = {VKEY_BASE | vk: c for (_l, _a, vk, c) in _KEYS}
-LABEL_BY_CODE: Dict[str, str] = {c: label for (label, _a, _vk, c) in _KEYS}
+# Arrows/enter resolve by action id only; the repurposed keys by button code only -- so a stray key
+# that happens to share an arrow's raw XBMCKey can't be mistaken for a nav press.
+CODE_BY_ACTION: Dict[int, str] = {a: c for (_l, a, _k, c) in _KEYS if a is not None}
+CODE_BY_BUTTONCODE: Dict[int, str] = {VKEY_BASE | k: c for (_l, a, k, c) in _KEYS if a is None}
+LABEL_BY_CODE: Dict[str, str] = {c: label for (label, _a, _k, c) in _KEYS}
 
 
 def parse_overrides(raw: object) -> Dict[int, str]:
@@ -61,8 +68,12 @@ def parse_overrides(raw: object) -> Dict[int, str]:
         return {}
     out: Dict[int, str] = {}
     for key, value in data.items():
+        # an override value must be a non-empty code string -- skip null/number/empty so a stray JSON
+        # value can't turn into a bogus forwarded key like "None"/"5".
+        if not isinstance(value, str) or not value.strip():
+            continue
         try:
-            out[int(key)] = str(value)
+            out[int(key)] = value.strip()
         except (ValueError, TypeError):
             continue
     return out

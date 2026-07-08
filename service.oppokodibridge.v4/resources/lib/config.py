@@ -80,7 +80,7 @@ class Config:
     # the OPPO (/sendremotekey) so the user can drive the disc menu. DEFAULT OFF = zero regression.
     remote_passthrough_enabled: bool = False
     # Optional JSON {button_code: "OPPO_CODE"} to fix/extend the built-in key map without a code change
-    # (button code = 0xF000 | Windows-VK; see passthrough.py). Blank = built-in map only.
+    # (button code = 0xF000 | XBMCKey; see passthrough.py). Blank = built-in map only.
     passthrough_key_overrides: str = ""
     passthrough_poll_interval: float = 4.0  # seconds between OPPO-state polls while armed (internal)
 
