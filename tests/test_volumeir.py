@@ -67,7 +67,7 @@ def test_volume_command_honours_custom_codes():
 def test_config_defaults_off_and_present():
     c = Config()
     assert c.tv_volume_via_ir is False
-    assert c.tv_code_volume_up == 16 and c.tv_code_volume_down == 17
+    assert c.tv_code_volume_up == 47 and c.tv_code_volume_down == 46  # HW-confirmed TCL RCA-15
     assert c.tv_volume_key_up == "volume_up" and c.tv_volume_key_down == "volume_down"
     c2 = Config.from_dict({"tv_volume_via_ir": True, "tv_code_volume_up": 20,
                            "tv_volume_key_up": "kb_volup"})

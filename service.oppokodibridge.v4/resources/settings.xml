@@ -332,7 +332,7 @@
         </setting>
         <setting id="tv_code_volume_up" type="integer" label="30120">
           <level>2</level>
-          <default>16</default>
+          <default>47</default>
           <constraints>
             <minimum>0</minimum>
             <maximum>255</maximum>
@@ -343,7 +343,7 @@
         </setting>
         <setting id="tv_code_volume_down" type="integer" label="30121">
           <level>2</level>
-          <default>17</default>
+          <default>46</default>
           <constraints>
             <minimum>0</minimum>
             <maximum>255</maximum>

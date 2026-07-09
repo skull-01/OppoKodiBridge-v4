@@ -63,10 +63,11 @@ class Config:
     # (ir_blaster_host etc.), so the volume keys PERMANENTLY drive the TV instead of Kodi's own volume.
     # DEFAULT OFF = zero regression; only installs the keymap when on AND a blaster host is set.
     tv_volume_via_ir: bool = False
-    # RCA volume commands. Defaults are the common RCA-15 values -- CAPTURE off the TV remote to confirm
-    # (database codes aren't guaranteed for a given panel; see the power 184/185 miss in tcl-ir-codes).
-    tv_code_volume_up: int = 16            # RCA command: Volume Up
-    tv_code_volume_down: int = 17          # RCA command: Volume Down
+    # RCA volume commands. Defaults 47/46 are the operator's TCL panel, HARDWARE-CONFIRMED from the real
+    # remote (RX capture + irdb TCL/TV/15 agree; the TV obeys them). Capture off your own TV remote for a
+    # different panel (database codes aren't guaranteed -- see the power 184/185 miss in tcl-ir-codes).
+    tv_code_volume_up: int = 47            # RCA command: Volume Up
+    tv_code_volume_down: int = 46          # RCA command: Volume Down
     # Kodi keymap key NAMES for the remote's volume buttons (a keymap binds keys, not action ids). The
     # media-key defaults suit most HID remotes; if the takeover doesn't fire, capture the real key name
     # from kodi.log (debug) and set these -- no file editing needed.
@@ -209,8 +210,8 @@ def from_addon() -> "Config":
         tv_code_down=i("tv_code_down", 88),
         tv_code_ok=i("tv_code_ok", 244),
         tv_volume_via_ir=b("tv_volume_via_ir", False),
-        tv_code_volume_up=i("tv_code_volume_up", 16),
-        tv_code_volume_down=i("tv_code_volume_down", 17),
+        tv_code_volume_up=i("tv_code_volume_up", 47),
+        tv_code_volume_down=i("tv_code_volume_down", 46),
         tv_volume_key_up=(s("tv_volume_key_up").strip() or "volume_up"),
         tv_volume_key_down=(s("tv_volume_key_down").strip() or "volume_down"),
         tv_volume_ir_idle_seconds=f("tv_volume_ir_idle_seconds", 60.0),
