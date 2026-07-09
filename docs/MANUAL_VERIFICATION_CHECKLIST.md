@@ -204,3 +204,22 @@ published `runtime_config.json`, service running, web server confirmed healthy (
 | 51 | [#42](https://github.com/skull-01/OppoKodiBridge-v4/issues/42) `d350b2b` | **Button-code capture:** press each of the 8 buttons, then `grep passthrough /storage/.kodi/temp/kodi.log`. | Each mapped key logs `action=.. button=.. -> <CODE>`; an `UNMAPPED action=.. button=<n>` line = a key whose real code differs — add `"<n>": "<CODE>"` to `passthrough_key_overrides`. Arrows/OK should work at once; transport/media codes are best-effort and may need overrides. |
 | 52 | [#42](https://github.com/skull-01/OppoKodiBridge-v4/issues/42) `6e27f86` | **Play/Pause + Stop:** press Play/Pause, then Stop. | `PAU` toggles play↔pause on the OPPO; `STP` ends the disc → OPPO idle → dialog closes → CEC returns the TV to Kodi. Confirms PAU-toggles-on-M9207 and the regain-the-remote path. |
 | 53 | [#42](https://github.com/skull-01/OppoKodiBridge-v4/issues/42) `d350b2b` | **Trap backstop:** while a disc plays, all keys go to the OPPO (you can't drive Kodi — intended). If the OPPO wedges, the dialog auto-closes at the armed-time ceiling (~6h); `systemctl restart kodi` over SSH is the manual escape. | Kodi control returns when the disc ends. A local escape key is a documented follow-up. |
+
+---
+
+## remote passthrough key-map fix — v4.5.1 (#42)
+
+**HARDWARE-CONFIRMED.** v4.5.0 shipped PREDICTED button codes (`0xF000|Windows-VK`); the real Kodi codes
+are `0xF000|XBMCKey` and differed for several keys. v4.5.1 reworks the map from codes CAPTURED off the
+operator's actual RF remote via the live add-on log — resolve stable keys by Kodi ACTION ID + the
+collision keys (Play/Pause & Back both = `ACTION_NAV_BACK`) and Stop by real button code; also handles a
+remote that double-fires one press as two raw codes. **Operator confirmed on hardware 2026-07-09: ALL
+mapped keys drive the OPPO disc menu** (arrows, OK, play/pause, stop, back, subtitle, audio, volume,
+info) → rows 50–52 effectively verified. `5f2dbba` → `main`, released
+[v4.5.1](https://github.com/skull-01/OppoKodiBridge-v4/releases/tag/v4.5.1), redeployed to the Ugoos
+(4.5.1, `remote_passthrough_enabled=true`). 307 off-box tests green.
+
+**WON'T-DO (over the network):** the Info long-press → OPPO *extended* info menu. It needs a true IR
+key-hold (an NEC repeat train — Info = NEC `0x49/0x44`, captured from the OPPO remote), which the network
+`/sendremotekey` API cannot emit. IR-blaster replay to the OPPO would work but was ruled out by the
+operator. Info stays a clean single press (basic info overlay).
