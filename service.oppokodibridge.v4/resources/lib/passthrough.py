@@ -8,51 +8,48 @@ Resolution has two layers, checked in order (overrides -> button code -> action 
 
 * by Kodi **action id** -- reliable for the standard navigation keys, which never collide
   (Up/Down/Left/Right/Select).
-* by Kodi **button code** -- for buttons the operator's RF remote sends as *generic* keys that Kodi
-  resolves to a COLLIDING action. This remote's Play/Pause button sends BackSpace and its Back button
-  sends browser-back; Kodi turns BOTH into ACTION_NAV_BACK, so an action-id map cannot tell them apart.
-  The button code identifies the physical key, so those are matched by button code.
+* by Kodi **button code** -- only for buttons that COLLIDE on an action id. This remote's Play/Pause and
+  Back buttons BOTH raise ACTION_NAV_BACK (button codes 61448 vs 61616), and Stop raises ACTION_NONE --
+  an action-id map cannot tell those apart, so they are matched by button code (checked first).
 
-Kodi's keyboard button code is ``0xF000 | XBMCKey`` (an SDL-style keysym enum) -- NOT the Windows
-virtual-key code. The VK codes captured from the operator's remote with the Windows tool identify the
-PHYSICAL key; XBMCKey equals the VK across the ASCII range and the multimedia/browser block 0xA6-0xBB
-(so browser-back/home, volume, mute and BackSpace line up), but differs elsewhere (Delete = 0x7F not
-the VK 0x2E; Menu = 0x13F not the VK 0x5D) -- those are translated below. These are best-effort
-predictions for an evdev-keyboard remote; a CEC/lirc remote uses a different code space. The first
-on-device run logs any miss (``passthrough: UNMAPPED ... button=<n>``); a ``passthrough_key_overrides``
-JSON entry corrects it with no code change.
+The maps below were CAPTURED from the operator's remote via the live add-on log (2026-07-09), not
+predicted. This remote double-fires -- one press emits a keyboard ``0xF0xx`` code AND a big
+``0x0101xxxx`` code -- but Kodi normalises both to one action id, which is why action id is the robust
+key. The on-device UNMAPPED log line + a ``passthrough_key_overrides`` JSON entry (button-code keyed)
+fix any remaining miss with no code change.
 """
 from __future__ import annotations
 
 import json
 from typing import Dict, Optional
 
-VKEY_BASE = 0xF000  # Kodi keyboard button code = 0xF000 | Windows virtual-key code
+# Maps CAPTURED from the operator's remote via the live add-on log (2026-07-09), not predicted.
+#
+# Kodi ACTION id -> OPPO code: the reliable path. These actions are stable and unique per button on this
+# remote. A single press can emit two raw button codes (a keyboard 0xF0xx code AND a big 0x0101xxxx one),
+# but Kodi normalises both to the same action id -- so action-id mapping is robust where a raw button
+# code is not. (VUP/VDN/OSD/SUB/AUD were UNMAPPED on the first hardware run; fixed here by action id.)
+CODE_BY_ACTION: Dict[int, str] = {
+    1:   "NLT",  # ACTION_MOVE_LEFT
+    2:   "NRT",  # ACTION_MOVE_RIGHT
+    3:   "NUP",  # ACTION_MOVE_UP
+    4:   "NDN",  # ACTION_MOVE_DOWN
+    7:   "SEL",  # ACTION_SELECT_ITEM  (OK / Enter)
+    88:  "VUP",  # ACTION_VOLUME_UP
+    89:  "VDN",  # ACTION_VOLUME_DOWN
+    91:  "OSD",  # ACTION_MUTE  -> operator uses the mute button as Info/OSD
+    117: "SUB",  # ACTION_CONTEXT_MENU  -> this remote's Subtitle (Apps) key
+    122: "AUD",  # this remote's Audio key (best-effort -- confirm on device)
+}
 
-# (label, kodi_action_id_or_None, code_key, oppo_code). Arrows/enter -> matched by ACTION ID (no
-# collision, reliable); the repurposed keys (action_id=None) -> matched by BUTTON CODE = 0xF000|code_key
-# where code_key is the XBMCKey (see docstring: usually == the Windows VK, but Delete/Menu differ).
-_KEYS = (
-    ("Up",         3,    0x26,  "NUP"),
-    ("Down",       4,    0x28,  "NDN"),
-    ("Left",       1,    0x25,  "NLT"),
-    ("Right",      2,    0x27,  "NRT"),
-    ("Enter/OK",   7,    0x0D,  "SEL"),
-    ("Play/Pause", None, 0x08,  "PAU"),  # BackSpace -- OPPO PAU toggles play<->pause itself
-    ("Stop",       None, 0x7F,  "STP"),  # Delete = XBMCK_DELETE 0x7F (NOT the VK 0x2E)
-    ("Back",       None, 0xA6,  "RET"),  # browser-back (XBMCK == VK here)
-    ("Subtitle",   None, 0x13F, "SUB"),  # Apps/menu = XBMCK_MENU 0x13F (NOT the VK 0x5D)
-    ("Audio",      None, 0xAC,  "AUD"),  # browser-home
-    ("Volume+",    None, 0xAF,  "VUP"),
-    ("Volume-",    None, 0xAE,  "VDN"),
-    ("Info",       None, 0xAD,  "OSD"),  # mute key -> Info/OSD overlay (operator's choice)
-)
-
-# Arrows/enter resolve by action id only; the repurposed keys by button code only -- so a stray key
-# that happens to share an arrow's raw XBMCKey can't be mistaken for a nav press.
-CODE_BY_ACTION: Dict[int, str] = {a: c for (_l, a, _k, c) in _KEYS if a is not None}
-CODE_BY_BUTTONCODE: Dict[int, str] = {VKEY_BASE | k: c for (_l, a, k, c) in _KEYS if a is None}
-LABEL_BY_CODE: Dict[str, str] = {c: label for (label, _a, _k, c) in _KEYS}
+# Kodi BUTTON code -> OPPO code, for buttons that COLLIDE on an action id (this remote's Play/Pause and
+# Back both raise ACTION_NAV_BACK=92) or that Kodi maps to ACTION_NONE=0 (Stop). Checked BEFORE the
+# action map so a collision key wins.
+CODE_BY_BUTTONCODE: Dict[int, str] = {
+    61448: "PAU",  # BackSpace -> Play/Pause (OPPO PAU toggles play<->pause)
+    61616: "RET",  # dedicated Back button (NAV_BACK, distinct from BackSpace's 61448)
+    61575: "STP",  # Stop (Delete / ACTION_NONE here) -- best-effort, confirm on device
+}
 
 
 def parse_overrides(raw: object) -> Dict[int, str]:
