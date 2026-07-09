@@ -19,6 +19,7 @@ plays. Hardware-validated 2026-07-08 (codes captured from the real remote, RCA c
 """
 from __future__ import annotations
 
+import shlex
 import subprocess
 
 from . import cec
@@ -116,8 +117,10 @@ def build_program(config, cmds) -> str:
     )
 
 
-def ssh_args(config):
-    """The ``ssh`` argv to run ``python3 -`` on the blaster host, or ``None`` if no host is configured."""
+def _ssh_base(config):
+    """``(ssh_option_argv, target)`` for the blaster host, or ``None`` if no host is configured or a
+    setting is option-shaped. Shared by the one-shot (``ssh_args``) and the persistent pipe
+    (``pipe_ssh_args``); the trailing remote command differs between the two."""
     host = str(getattr(config, "ir_blaster_host", "") or "").strip()
     if not host:
         return None
@@ -131,18 +134,178 @@ def ssh_args(config):
         log("ir_remote: refusing option-shaped blaster host/user/key ({!r}/{!r})".format(host, user))
         return None
     target = "{}@{}".format(user, host) if user else host
-    args = ["ssh", "-o", "BatchMode=yes",
+    opts = ["-o", "BatchMode=yes",
             "-o", "ConnectTimeout={}".format(int(getattr(config, "ir_blaster_connect_timeout", 8))),
             "-o", "StrictHostKeyChecking=accept-new"]
     if key:
-        args += ["-i", key]
-    args += [target, "python3 -"]
-    return args
+        opts += ["-i", key]
+    return opts, target
+
+
+def ssh_args(config):
+    """The ``ssh`` argv to run ``python3 -`` on the blaster host, or ``None`` if no host is configured."""
+    base = _ssh_base(config)
+    if base is None:
+        return None
+    opts, target = base
+    return ["ssh"] + opts + [target, "python3 -"]
 
 
 def _default_run(args, program, timeout):
     p = subprocess.run(args, input=program, capture_output=True, text=True, timeout=timeout)
     return p.returncode, (p.stderr or "")
+
+
+# --- Persistent-pipe IR sender (for rapid keys, e.g. volume passthrough) -------------------------------
+#
+# The one-shot path above opens a fresh SSH connection per invocation -- fine for the once-per-handoff
+# input switch, but volume is a mash/hold button, and a per-press SSH handshake + python startup would be
+# ~0.5-1s each. Instead, open ONE ssh session running a stdin read-loop that fires an RCA frame per line,
+# and hold it open while passthrough is armed: ~50-80ms per press, and it still installs nothing on the
+# blaster. The loop is fed via ``python3 -c`` (NOT ``python3 -``) so stdin stays free for command lines.
+#
+# This mirrors the frame/send codec of _REMOTE_PROGRAM above; it is kept SEPARATE (not refactored into a
+# shared fragment) so the hardware-validated one-shot switch program is left byte-identical.
+_LOOP_PROGRAM = r'''
+import sys, subprocess, tempfile, os
+DEV = {dev!r}
+DEVICE, CARRIER, REPS, GAP = {device}, {carrier}, {reps}, {gap}
+MARK, Z, O, TR = {mark}, {zero}, {one}, {trailer}
+HEADER = {header!r}
+def frame(c):
+    bits = "{{:04b}}{{:08b}}{{:04b}}{{:08b}}".format(DEVICE & 0xF, c & 0xFF, (~DEVICE) & 0xF, (~c) & 0xFF)
+    d = list(HEADER)
+    for b in bits:
+        d += [MARK, O if b == "1" else Z]
+    d.append(TR)
+    return d
+def send(c):
+    f = frame(c); durs = list(f)
+    for _ in range(max(1, REPS) - 1):
+        durs += [GAP] + list(f)
+    lines = ["carrier %d" % CARRIER] + ["%s %d" % ("pulse" if i % 2 == 0 else "space", v)
+                                        for i, v in enumerate(durs)]
+    fd, p = tempfile.mkstemp(suffix=".ir")
+    os.write(fd, ("\n".join(lines) + "\n").encode()); os.close(fd)
+    try:
+        subprocess.run(["ir-ctl", "-d", DEV, "--send", p], check=True)
+    finally:
+        try:
+            os.unlink(p)
+        except OSError:
+            pass
+for line in sys.stdin:
+    line = line.strip()
+    if not line:
+        continue
+    try:
+        c = int(line)
+    except ValueError:
+        continue
+    try:
+        send(c)
+    except Exception:
+        pass
+'''
+
+
+def build_loop_program(config) -> str:
+    """The persistent read-loop blaster program (fed to ``python3 -c``): one RCA frame per stdin line."""
+    return _LOOP_PROGRAM.format(
+        dev=str(getattr(config, "tv_blaster_lirc_device", "/dev/lirc0") or "/dev/lirc0"),
+        device=int(getattr(config, "tv_rca_device", 15)),
+        carrier=int(getattr(config, "tv_ir_carrier", RCA_CARRIER)),
+        reps=int(getattr(config, "tv_ir_reps", 3)),
+        gap=_GAP, mark=_MARK, zero=_ZERO_SPACE, one=_ONE_SPACE, trailer=_TRAILER,
+        header=tuple(_HEADER),
+    )
+
+
+def pipe_ssh_args(config):
+    """The ``ssh`` argv that runs the persistent IR read-loop on the blaster (stdin carries RCA command
+    lines), or ``None`` if no host is configured. Uses ``python3 -c <program>`` -- ``shlex.quote`` makes
+    the multi-line program one shell-safe arg for the remote POSIX shell -- so stdin stays free for
+    commands. Adds keep-alives so a dead Pi/link tears the pipe down rather than hanging open."""
+    base = _ssh_base(config)
+    if base is None:
+        return None
+    opts, target = base
+    opts = opts + ["-o", "ServerAliveInterval=10", "-o", "ServerAliveCountMax=3"]
+    program = build_loop_program(config)
+    return ["ssh"] + opts + [target, "python3 -c " + shlex.quote(program)]
+
+
+def _default_popen(args):
+    return subprocess.Popen(args, stdin=subprocess.PIPE,
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+class PersistentBlaster:
+    """A long-lived IR sender for rapid keys (volume passthrough): one SSH connection running a python
+    read-loop on the blaster that fires an RCA frame per stdin line. Opened lazily on the first ``send``,
+    reused until ``close()``.
+
+    NOT internally locked: all I/O is expected on ONE thread (the passthrough worker). Every method is
+    non-fatal by contract -- a broken pipe / dead ssh logs, tears the connection down, and returns
+    ``False``; the next ``send`` transparently reopens."""
+
+    def __init__(self, config, popen=None):
+        self.config = config
+        self._popen = popen or _default_popen
+        self._proc = None
+
+    def _alive(self) -> bool:
+        return self._proc is not None and self._proc.poll() is None
+
+    def _ensure(self) -> bool:
+        if self._alive():
+            return True
+        self._teardown()  # reap a dead process before reopening
+        args = pipe_ssh_args(self.config)
+        if args is None:
+            return False  # no blaster host configured -- volume is a logged no-op
+        self._proc = self._popen(args)
+        return self._proc is not None
+
+    def send(self, command) -> bool:
+        """Fire one RCA command at the TV. Returns True if the byte was written, False on any failure."""
+        try:
+            command = int(command)
+        except (TypeError, ValueError):
+            return False
+        try:
+            if not self._ensure():
+                return False
+            self._proc.stdin.write(("%d\n" % command).encode())
+            self._proc.stdin.flush()
+            return True
+        except Exception as exc:  # noqa: BLE001 -- broken pipe / ssh died / anything: stay non-fatal
+            log("ir_remote: persistent blaster send {} failed (non-fatal): {!r}".format(command, exc))
+            self._teardown()
+            return False
+
+    def _teardown(self) -> None:
+        proc, self._proc = self._proc, None
+        if proc is None:
+            return
+        try:
+            if proc.stdin is not None:
+                try:
+                    proc.stdin.close()  # EOF -> the remote read-loop exits cleanly
+                except Exception:  # noqa: BLE001
+                    pass
+            try:
+                proc.wait(timeout=3)
+            except Exception:  # noqa: BLE001 -- didn't exit in time: force it
+                try:
+                    proc.terminate()
+                except Exception:  # noqa: BLE001
+                    pass
+        except Exception as exc:  # noqa: BLE001
+            log("ir_remote: persistent blaster teardown error (non-fatal): {!r}".format(exc))
+
+    def close(self) -> None:
+        self._teardown()
 
 
 class RemoteBlasterSwitcher:

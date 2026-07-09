@@ -58,6 +58,21 @@ class Config:
     tv_code_up: int = 89                   # RCA command: UP
     tv_code_down: int = 88                 # RCA command: DOWN
     tv_code_ok: int = 244                  # RCA command: OK / ENTER
+    # TV VOLUME TAKEOVER (always-on, independent of the disc handoff): a Kodi keymap remaps the remote's
+    # volume keys to NotifyAll messages the service catches and fires at the TV via the IR blaster
+    # (ir_blaster_host etc.), so the volume keys PERMANENTLY drive the TV instead of Kodi's own volume.
+    # DEFAULT OFF = zero regression; only installs the keymap when on AND a blaster host is set.
+    tv_volume_via_ir: bool = False
+    # RCA volume commands. Defaults are the common RCA-15 values -- CAPTURE off the TV remote to confirm
+    # (database codes aren't guaranteed for a given panel; see the power 184/185 miss in tcl-ir-codes).
+    tv_code_volume_up: int = 16            # RCA command: Volume Up
+    tv_code_volume_down: int = 17          # RCA command: Volume Down
+    # Kodi keymap key NAMES for the remote's volume buttons (a keymap binds keys, not action ids). The
+    # media-key defaults suit most HID remotes; if the takeover doesn't fire, capture the real key name
+    # from kodi.log (debug) and set these -- no file editing needed.
+    tv_volume_key_up: str = "volume_up"
+    tv_volume_key_down: str = "volume_down"
+    tv_volume_ir_idle_seconds: float = 60.0  # drop the persistent SSH pipe after this idle gap (internal)
     ir_blaster_timeout: float = 20.0       # overall SSH+sequence timeout (s)
     ir_blaster_connect_timeout: int = 8    # SSH ConnectTimeout (s)
     oppo_hdmi_phys: str = "1.0.0.0"
@@ -193,6 +208,12 @@ def from_addon() -> "Config":
         tv_code_up=i("tv_code_up", 89),
         tv_code_down=i("tv_code_down", 88),
         tv_code_ok=i("tv_code_ok", 244),
+        tv_volume_via_ir=b("tv_volume_via_ir", False),
+        tv_code_volume_up=i("tv_code_volume_up", 16),
+        tv_code_volume_down=i("tv_code_volume_down", 17),
+        tv_volume_key_up=(s("tv_volume_key_up").strip() or "volume_up"),
+        tv_volume_key_down=(s("tv_volume_key_down").strip() or "volume_down"),
+        tv_volume_ir_idle_seconds=f("tv_volume_ir_idle_seconds", 60.0),
         oppo_hdmi_phys=s("oppo_hdmi_phys") or "1.0.0.0",
         serial_control=b("serial_control", False),
         serial_port=s("serial_port") or "/dev/ttyUSB0",

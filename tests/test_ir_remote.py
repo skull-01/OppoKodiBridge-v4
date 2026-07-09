@@ -1,5 +1,7 @@
 """ir_remote transport: RCA frame codec, the anchored input-menu sequence, the self-contained blaster
 program, SSH arg construction, and the non-fatal to_oppo / CEC-delegating to_kodi contract."""
+import shlex
+
 from resources.lib import ir_remote, tvswitch
 from resources.lib.config import Config
 
@@ -147,3 +149,144 @@ def test_to_kodi_respects_reclaim_toggle(monkeypatch):
 def test_tvswitch_dispatches_ir_remote():
     sw = tvswitch.make_switcher(Config(tv_switch_method="ir_remote"))
     assert isinstance(sw, ir_remote.RemoteBlasterSwitcher)
+
+
+# --- persistent-pipe IR sender (volume passthrough) ---------------------------------------------------
+
+class _FakeStdin:
+    def __init__(self, fail=False):
+        self.buf = b""
+        self.flushed = 0
+        self.closed = False
+        self._fail = fail
+
+    def write(self, b):
+        if self._fail:
+            raise BrokenPipeError("pipe")
+        self.buf += b
+
+    def flush(self):
+        self.flushed += 1
+
+    def close(self):
+        self.closed = True
+
+
+class _FakeProc:
+    def __init__(self):
+        self.stdin = _FakeStdin()
+        self._returncode = None   # None = still running
+        self.waited = False
+        self.terminated = False
+
+    def poll(self):
+        return self._returncode
+
+    def wait(self, timeout=None):
+        self.waited = True
+        self._returncode = 0
+        return 0
+
+    def terminate(self):
+        self.terminated = True
+        self._returncode = 0
+
+
+def _popen_factory(procs):
+    seq = iter(procs)
+
+    def factory(args):
+        factory.calls.append(args)
+        return next(seq)
+
+    factory.calls = []
+    return factory
+
+
+def test_build_loop_program_is_valid_python_and_reads_stdin():
+    prog = ir_remote.build_loop_program(Config(tv_blaster_lirc_device="/dev/lirc0", tv_rca_device=15))
+    compile(prog, "<loop>", "exec")               # doubled braces must survive .format()
+    assert "for line in sys.stdin" in prog
+    assert "'/dev/lirc0'" in prog and "ir-ctl" in prog
+
+
+def test_pipe_ssh_args_uses_python_c_so_stdin_is_free():
+    args = ir_remote.pipe_ssh_args(Config(ir_blaster_host="192.168.1.143", ir_blaster_user="pi"))
+    assert args[0] == "ssh"
+    assert args[-2] == "pi@192.168.1.143"
+    assert args[-1].startswith("python3 -c ")     # NOT the plain "python3 -" stdin form
+    assert "ServerAliveInterval=10" in args        # keep-alives on the persistent pipe
+    prog = shlex.split(args[-1])[2]                 # the quoted program is one shell arg, and valid python
+    compile(prog, "<loop>", "exec")
+
+
+def test_pipe_ssh_args_none_without_host_and_guards_option_shaped_values():
+    assert ir_remote.pipe_ssh_args(Config()) is None
+    assert ir_remote.pipe_ssh_args(Config(ir_blaster_host="-oProxyCommand=id")) is None
+
+
+def test_ssh_args_one_shot_form_unchanged_no_keepalives():
+    # the hardware-validated one-shot switch keeps the plain-stdin form and no pipe-only keep-alives
+    args = ir_remote.ssh_args(Config(ir_blaster_host="h"))
+    assert args[-1] == "python3 -"
+    assert "ServerAliveInterval=10" not in args
+
+
+def test_persistent_blaster_opens_once_reuses_and_writes_lines():
+    proc = _FakeProc()
+    factory = _popen_factory([proc])
+    pb = ir_remote.PersistentBlaster(Config(ir_blaster_host="h"), popen=factory)
+    assert pb.send(16) is True
+    assert pb.send(17) is True
+    assert len(factory.calls) == 1                 # one connection, reused
+    assert proc.stdin.buf == b"16\n17\n"
+    assert proc.stdin.flushed == 2
+
+
+def test_persistent_blaster_no_host_is_a_false_noop():
+    called = []
+    pb = ir_remote.PersistentBlaster(Config(), popen=lambda a: called.append(a))
+    assert pb.send(16) is False
+    assert called == []
+
+
+def test_persistent_blaster_rejects_non_int_command():
+    proc = _FakeProc()
+    pb = ir_remote.PersistentBlaster(Config(ir_blaster_host="h"), popen=_popen_factory([proc]))
+    assert pb.send("nope") is False
+    assert proc.stdin.buf == b""                    # never even opened for a bad command
+
+
+def test_persistent_blaster_broken_pipe_tears_down_then_reopens():
+    dead = _FakeProc()
+    dead.stdin = _FakeStdin(fail=True)
+    fresh = _FakeProc()
+    factory = _popen_factory([dead, fresh])
+    pb = ir_remote.PersistentBlaster(Config(ir_blaster_host="h"), popen=factory)
+    assert pb.send(16) is False                     # write raised -> torn down
+    assert dead.stdin.closed is True
+    assert pb.send(17) is True                       # transparently reopened
+    assert len(factory.calls) == 2
+    assert fresh.stdin.buf == b"17\n"
+
+
+def test_persistent_blaster_reopens_if_process_exits_between_sends():
+    dead = _FakeProc()
+    fresh = _FakeProc()
+    factory = _popen_factory([dead, fresh])
+    pb = ir_remote.PersistentBlaster(Config(ir_blaster_host="h"), popen=factory)
+    assert pb.send(16) is True
+    dead._returncode = 1                             # ssh exits between presses
+    assert pb.send(17) is True
+    assert len(factory.calls) == 2
+    assert dead.stdin.closed is True                 # the dead one was reaped
+    assert fresh.stdin.buf == b"17\n"
+
+
+def test_persistent_blaster_close_closes_stdin_and_is_idempotent():
+    proc = _FakeProc()
+    pb = ir_remote.PersistentBlaster(Config(ir_blaster_host="h"), popen=_popen_factory([proc]))
+    pb.send(16)
+    pb.close()
+    assert proc.stdin.closed is True and proc.waited is True
+    pb.close()                                       # idempotent: no raise on a closed sender

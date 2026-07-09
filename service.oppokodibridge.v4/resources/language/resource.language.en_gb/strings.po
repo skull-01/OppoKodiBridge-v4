@@ -298,3 +298,23 @@ msgstr ""
 msgctxt "#30118"
 msgid "OPPO state poll interval (seconds)"
 msgstr ""
+
+msgctxt "#30119"
+msgid "Take over the volume keys: drive the TV over IR always (needs the IR blaster host)"
+msgstr ""
+
+msgctxt "#30120"
+msgid "RCA command: Volume Up (capture off your TV remote)"
+msgstr ""
+
+msgctxt "#30121"
+msgid "RCA command: Volume Down (capture off your TV remote)"
+msgstr ""
+
+msgctxt "#30122"
+msgid "Volume Up key name in Kodi keymap (default volume_up)"
+msgstr ""
+
+msgctxt "#30123"
+msgid "Volume Down key name in Kodi keymap (default volume_down)"
+msgstr ""

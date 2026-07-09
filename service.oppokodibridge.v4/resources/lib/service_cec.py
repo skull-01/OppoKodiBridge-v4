@@ -18,6 +18,7 @@ import os
 
 from . import config as config_mod
 from . import pcf
+from . import volumeir
 from .kodilog import log
 
 ADDON_ID = "service.oppokodibridge.v4"
@@ -129,6 +130,37 @@ def _passthrough_enabled() -> bool:
         return False
 
 
+def _keymaps_dir() -> str:
+    return _translate("special://profile/keymaps/")
+
+
+def _reload_keymaps() -> None:
+    import xbmc
+
+    xbmc.executebuiltin("Action(reloadkeymaps)")
+
+
+def _sync_volume_keymap(cfg) -> None:
+    """Install or remove the always-on volume-takeover keymap to match the setting, reloading keymaps
+    only on a real change. Installed ONLY when the feature is on AND a blaster host is set -- otherwise
+    the keys would be remapped to a NotifyAll nobody can act on (dead volume keys). Non-fatal."""
+    want = bool(getattr(cfg, "tv_volume_via_ir", False)) and bool(
+        str(getattr(cfg, "ir_blaster_host", "") or "").strip())
+    try:
+        kmdir = _keymaps_dir()
+        if want:
+            changed = volumeir.install_keymap(
+                kmdir, getattr(cfg, "tv_volume_key_up", "volume_up"),
+                getattr(cfg, "tv_volume_key_down", "volume_down"))
+        else:
+            changed = volumeir.remove_keymap(kmdir)
+        if changed:
+            _reload_keymaps()
+            log("volume takeover: keymap {} + keymaps reloaded".format("installed" if want else "removed"))
+    except Exception as exc:  # pragma: no cover - hardware path
+        log("volume takeover keymap sync failed (non-fatal): {!r}".format(exc))
+
+
 def main() -> None:
     import xbmc
 
@@ -137,6 +169,16 @@ def main() -> None:
     _install_pcf()
     _maybe_launch_first_run_wizard()
 
+    # Always-on TV volume takeover: a keymap remaps the remote's volume keys to NotifyAll, and this
+    # forwarder fires the mapped RCA command at the TV via the IR blaster. `state["cfg"]` is the latest
+    # config (refreshed on settings change) so onNotification reads the current volume codes cheaply.
+    state = {"cfg": config_mod.from_addon()}
+    try:
+        forwarder = volumeir.VolumeIrForwarder(state["cfg"])
+    except Exception as exc:  # pragma: no cover - hardware path
+        log("volume takeover forwarder unavailable (non-fatal): {!r}".format(exc))
+        forwarder = None
+
     class _Monitor(xbmc.Monitor):
         def __init__(self) -> None:
             super().__init__()
@@ -144,14 +186,34 @@ def main() -> None:
 
         def onSettingsChanged(self) -> None:
             self._model = _autofill_ip_on_model_change(self._model)
+            cfg = config_mod.from_addon()
+            state["cfg"] = cfg
             log("settings changed; re-publishing config + playercorefactory.xml")
             _publish_config()
             _install_pcf()
+            _sync_volume_keymap(cfg)
+            if forwarder is not None:
+                # push the refreshed connection settings into the live pipe so first-time setup
+                # (enable + fill in the blaster host) takes effect without a Kodi restart.
+                forwarder.update_config(cfg)
+
+        def onNotification(self, sender: str, method: str, data: str) -> None:
+            # Fast path for the volume-takeover NotifyAll messages; every other notification is ignored.
+            if forwarder is None:
+                return
+            try:
+                cmd = volumeir.volume_command(method, state["cfg"])
+            except Exception as exc:  # noqa: BLE001 -- a bad notification must never break the service
+                log("volume takeover: notification parse error (non-fatal): {!r}".format(exc))
+                return
+            if cmd is not None:
+                forwarder.submit(cmd)
 
     # The CEC reclaim is no longer the service's job: the orchestrator triggers it directly via
     # JSON-RPC (cec.reclaim_kodi -> script.cecreclaim) when the handoff ends. This service only
     # installs the playercorefactory.xml and publishes the resolved config, then idles.
     monitor = _Monitor()
+    _sync_volume_keymap(state["cfg"])  # install/remove the keymap to match the current setting
 
     # Remote passthrough (default-off): when enabled, poll the OPPO's playback state and open/close a
     # key-forwarding dialog around a playing disc. Lazy import -- passthrough_ui pulls in xbmcgui, which
@@ -180,6 +242,18 @@ def main() -> None:
 
     if runner is not None:
         runner.shutdown()
+    # Stop the volume forwarder and REVERT the keymap so disabling/stopping the add-on restores Kodi's
+    # own volume keys. (Unlike playercorefactory.xml, keymaps are reloaded at runtime, so removing here
+    # is safe; on the next start the service reinstalls it if the feature is still on.)
+    if forwarder is not None:
+        forwarder.stop()
+        forwarder.join(2.0)  # let the worker close the SSH pipe before we drop the keymap
+    try:
+        if volumeir.remove_keymap(_keymaps_dir()):
+            _reload_keymaps()
+            log("volume takeover: keymap removed on stop")
+    except Exception as exc:  # pragma: no cover - hardware path
+        log("volume takeover keymap removal on stop failed (non-fatal): {!r}".format(exc))
     # Do NOT remove playercorefactory.xml on shutdown: Kodi loads it at STARTUP, before this service
     # runs, so the file must already be on disk at boot -> it has to persist across restarts. It is
     # removed only when the handoff is turned off (in _install_pcf). After a fresh install, Kodi must

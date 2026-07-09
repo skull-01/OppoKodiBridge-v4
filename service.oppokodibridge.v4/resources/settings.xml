@@ -325,6 +325,47 @@
             <heading>30113</heading>
           </control>
         </setting>
+        <setting id="tv_volume_via_ir" type="boolean" label="30119">
+          <level>1</level>
+          <default>false</default>
+          <control type="toggle"/>
+        </setting>
+        <setting id="tv_code_volume_up" type="integer" label="30120">
+          <level>2</level>
+          <default>16</default>
+          <constraints>
+            <minimum>0</minimum>
+            <maximum>255</maximum>
+          </constraints>
+          <control type="edit" format="integer">
+            <heading>30120</heading>
+          </control>
+        </setting>
+        <setting id="tv_code_volume_down" type="integer" label="30121">
+          <level>2</level>
+          <default>17</default>
+          <constraints>
+            <minimum>0</minimum>
+            <maximum>255</maximum>
+          </constraints>
+          <control type="edit" format="integer">
+            <heading>30121</heading>
+          </control>
+        </setting>
+        <setting id="tv_volume_key_up" type="string" label="30122">
+          <level>2</level>
+          <default>volume_up</default>
+          <control type="edit" format="string">
+            <heading>30122</heading>
+          </control>
+        </setting>
+        <setting id="tv_volume_key_down" type="string" label="30123">
+          <level>2</level>
+          <default>volume_down</default>
+          <control type="edit" format="string">
+            <heading>30123</heading>
+          </control>
+        </setting>
       </group>
     </category>
     <category id="passthrough" label="30115">
