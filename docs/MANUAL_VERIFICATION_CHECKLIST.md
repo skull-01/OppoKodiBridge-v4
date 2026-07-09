@@ -223,3 +223,25 @@ info) → rows 50–52 effectively verified. `5f2dbba` → `main`, released
 key-hold (an NEC repeat train — Info = NEC `0x49/0x44`, captured from the OPPO remote), which the network
 `/sendremotekey` API cannot emit. IR-blaster replay to the OPPO would work but was ruled out by the
 operator. Info stays a clean single press (basic info overlay).
+
+---
+
+## TV volume takeover over IR — #43 (`01cacfd`)
+
+**DEFAULT-OFF, standalone always-on feature** (independent of the disc handoff). A Kodi **keymap** remaps
+the remote's volume keys globally to `NotifyAll` → the service's `onNotification` fires an RCA command at
+the TV via a **persistent SSH pipe** to the IR blaster (reuses `ir_blaster_host` etc., aimed at the TV).
+Kodi's own volume for those keys is taken over. Built under Protocol 1; independent 3-lens re-audit +
+adversarial re-verify of the fix — caught + fixed a **HIGH** (the forwarder held the *startup* config, so a
+settings change didn't refresh the pipe → dead volume keys until a Kodi restart), then clean.
+**Zero-regression:** default-off installs no keymap; the `ir_remote` one-shot switch is byte-identical.
+**330 off-box tests.** `01cacfd` on `feat/passthrough-volume-ir` — NOT released, `main` untouched.
+
+| # | Issue / SHA | Check | What you should see |
+|---|-------------|-------|---------------------|
+| 54 | [#43](https://github.com/skull-01/OppoKodiBridge-v4/issues/43) `01cacfd` | **Capture the RCA volume codes:** on the Pi, `ir-ctl -d /dev/lirc1 --receive`, press the TV remote's Vol+ then Vol−; decode the RCA dev-15 function numbers. Set `tv_code_volume_up` / `tv_code_volume_down`. | Two RCA-15 function numbers (the defaults 16/17 are guesses — database codes aren't guaranteed for this panel, cf. power 184/185). |
+| 55 | [#43](https://github.com/skull-01/OppoKodiBridge-v4/issues/43) `01cacfd` | **Enable:** set `ir_blaster_host` (the same Pi as `ir_remote`) and `tv_volume_via_ir=true`; then `grep "volume takeover" /storage/.kodi/temp/kodi.log`. | Log: `keymap installed + keymaps reloaded`; the file `<userdata>/keymaps/okb_volume_takeover.xml` exists. |
+| 56 | [#43](https://github.com/skull-01/OppoKodiBridge-v4/issues/43) `01cacfd` | **Takeover fires:** press Vol+/Vol−. | The **TV's** volume changes (TV OSD moves) via the IR blaster, and **Kodi's own volume bar does NOT appear**. If Kodi's volume still moves / nothing happens → the key name is wrong: enable Kodi debug, press Vol+, read the key name from `kodi.log`, set `tv_volume_key_up` / `tv_volume_key_down`, retry. |
+| 57 | [#43](https://github.com/skull-01/OppoKodiBridge-v4/issues/43) `01cacfd` | **First-time setup, no restart (audit-fix regression):** with the service already running, flip `tv_volume_via_ir` on AND fill in `ir_blaster_host` via Settings. | Volume drives the TV **without restarting Kodi** — the forwarder picks up the new host live (this is the HIGH the audit caught). |
+| 58 | [#43](https://github.com/skull-01/OppoKodiBridge-v4/issues/43) `01cacfd` | **Disable reverts:** set `tv_volume_via_ir=false`. | Log: `keymap removed + keymaps reloaded`; the keymap file is gone; Kodi's own volume keys work again. |
+| 59 | [#43](https://github.com/skull-01/OppoKodiBridge-v4/issues/43) `01cacfd` | **During OPPO disc playback (nuance):** while a disc plays on the OPPO (passthrough armed), press Vol±. | Ideally the TV volume still changes (the global keymap fires under the passthrough dialog). If it does NOT, volume-during-disc-play is a documented follow-up (add a dialog fallback) — no regression either way. |
