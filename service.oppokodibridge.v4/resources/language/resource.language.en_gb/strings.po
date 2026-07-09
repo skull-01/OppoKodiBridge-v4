@@ -318,3 +318,7 @@ msgstr ""
 msgctxt "#30123"
 msgid "Volume Down key name in Kodi keymap (default volume_down)"
 msgstr ""
+
+msgctxt "#30124"
+msgid "Volume leak button codes to swallow (comma-sep; for a remote that double-fires volume)"
+msgstr ""

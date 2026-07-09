@@ -73,6 +73,12 @@ class Config:
     # from kodi.log (debug) and set these -- no file editing needed.
     tv_volume_key_up: str = "volume_up"
     tv_volume_key_down: str = "volume_down"
+    # Some remotes DOUBLE-FIRE a volume press as two raw codes: the keymap catches the media key (-> the
+    # takeover), but the SECOND code can leak into another passthrough action. The operator's remote leaks
+    # Vol+ as Kodi button code 61625 and Vol- as 61624, which Kodi resolves to the Audio action -- so a
+    # volume press also hijacked the OPPO's audio track. List those leak button codes here (comma-sep) to
+    # swallow them in the keymap (noop) so they can't cross-fire. Blank = none (normal remotes).
+    tv_volume_leak_codes: str = ""
     tv_volume_ir_idle_seconds: float = 60.0  # drop the persistent SSH pipe after this idle gap (internal)
     ir_blaster_timeout: float = 20.0       # overall SSH+sequence timeout (s)
     ir_blaster_connect_timeout: int = 8    # SSH ConnectTimeout (s)
@@ -214,6 +220,7 @@ def from_addon() -> "Config":
         tv_code_volume_down=i("tv_code_volume_down", 46),
         tv_volume_key_up=(s("tv_volume_key_up").strip() or "volume_up"),
         tv_volume_key_down=(s("tv_volume_key_down").strip() or "volume_down"),
+        tv_volume_leak_codes=s("tv_volume_leak_codes").strip(),
         tv_volume_ir_idle_seconds=f("tv_volume_ir_idle_seconds", 60.0),
         oppo_hdmi_phys=s("oppo_hdmi_phys") or "1.0.0.0",
         serial_control=b("serial_control", False),

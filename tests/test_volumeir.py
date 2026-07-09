@@ -39,6 +39,33 @@ def test_remove_keymap_reports_removal(tmp_path):
     assert volumeir.remove_keymap(kmdir) is False          # already gone
 
 
+def test_parse_leak_codes():
+    assert volumeir.parse_leak_codes("") == []
+    assert volumeir.parse_leak_codes(None) == []
+    assert volumeir.parse_leak_codes("61625,61624") == [61625, 61624]
+    assert volumeir.parse_leak_codes(" 61625 , 61624 ") == [61625, 61624]
+    assert volumeir.parse_leak_codes("61625;61624") == [61625, 61624]
+    assert volumeir.parse_leak_codes("61625,abc,61624") == [61625, 61624]   # skip junk
+
+
+def test_keymap_xml_adds_noop_for_leak_codes():
+    xml = volumeir.keymap_xml("volume_up", "volume_down", [61625, 61624])
+    assert '<key id="61625">noop</key>' in xml
+    assert '<key id="61624">noop</key>' in xml
+    assert "<volume_up>NotifyAll" in xml                    # volume still remapped
+    # no leak codes -> no <key entries at all
+    assert "<key id=" not in volumeir.keymap_xml("volume_up", "volume_down")
+
+
+def test_install_keymap_rewrites_when_leak_codes_change(tmp_path):
+    kmdir = str(tmp_path / "keymaps")
+    assert volumeir.install_keymap(kmdir, "volume_up", "volume_down") is True
+    assert volumeir.install_keymap(kmdir, "volume_up", "volume_down") is False
+    assert volumeir.install_keymap(kmdir, "volume_up", "volume_down", [61625, 61624]) is True  # changed
+    body = (tmp_path / "keymaps" / volumeir.KEYMAP_FILENAME).read_text()
+    assert '<key id="61625">noop</key>' in body and '<key id="61624">noop</key>' in body
+
+
 # --- NotifyAll matching -------------------------------------------------------------------------------
 
 def test_volume_command_maps_messages_to_rca_codes():

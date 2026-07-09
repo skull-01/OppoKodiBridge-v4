@@ -366,6 +366,13 @@
             <heading>30123</heading>
           </control>
         </setting>
+        <setting id="tv_volume_leak_codes" type="string" label="30124">
+          <level>2</level>
+          <default></default>
+          <control type="edit" format="string">
+            <heading>30124</heading>
+          </control>
+        </setting>
       </group>
     </category>
     <category id="passthrough" label="30115">

@@ -151,7 +151,8 @@ def _sync_volume_keymap(cfg) -> None:
         if want:
             changed = volumeir.install_keymap(
                 kmdir, getattr(cfg, "tv_volume_key_up", "volume_up"),
-                getattr(cfg, "tv_volume_key_down", "volume_down"))
+                getattr(cfg, "tv_volume_key_down", "volume_down"),
+                volumeir.parse_leak_codes(getattr(cfg, "tv_volume_leak_codes", "")))
         else:
             changed = volumeir.remove_keymap(kmdir)
         if changed:
