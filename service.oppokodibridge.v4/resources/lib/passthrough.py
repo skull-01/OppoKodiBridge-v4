@@ -76,6 +76,24 @@ def parse_overrides(raw: object) -> Dict[int, str]:
     return out
 
 
+def parse_ignore_codes(raw: object) -> "set":
+    """A set of int button codes the passthrough dialog should SWALLOW (never forward). Used for a
+    double-firing remote whose volume keys are handled by the TV-volume takeover (keymap -> NotifyAll)
+    but still deliver a second event to this dialog that would otherwise mis-resolve to another action
+    (e.g. this remote's Vol+/Vol- = button 61625/61624 leak in as the Audio action). Comma/space/
+    semicolon-separated; blank -> empty set. Best-effort: non-numeric tokens are skipped."""
+    out = set()
+    for tok in str(raw or "").replace(";", ",").replace(" ", ",").split(","):
+        tok = tok.strip()
+        if not tok:
+            continue
+        try:
+            out.add(int(tok))
+        except ValueError:
+            continue
+    return out
+
+
 def resolve(action_id: int, button_code: int, overrides: Optional[Dict[int, str]] = None) -> Optional[str]:
     """The OPPO OREMOTE code for a Kodi action, or ``None`` if this key is not forwarded.
 

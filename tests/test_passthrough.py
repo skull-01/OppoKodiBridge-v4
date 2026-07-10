@@ -58,6 +58,15 @@ def test_parse_overrides_is_lenient():
     assert pt.parse_overrides('{"61616": " RET ", "9": null}') == {61616: "RET"}
 
 
+def test_parse_ignore_codes():
+    assert pt.parse_ignore_codes("") == set()
+    assert pt.parse_ignore_codes(None) == set()
+    assert pt.parse_ignore_codes("61625,61624") == {61625, 61624}
+    assert pt.parse_ignore_codes(" 61625 , 61624 ") == {61625, 61624}
+    assert pt.parse_ignore_codes("61625;61624") == {61625, 61624}
+    assert pt.parse_ignore_codes("61625,junk,61624") == {61625, 61624}   # skip non-numeric
+
+
 def test_maps_are_consistent():
     for code in list(pt.CODE_BY_ACTION.values()) + list(pt.CODE_BY_BUTTONCODE.values()):
         assert 2 <= len(code) <= 3 and code.isupper()

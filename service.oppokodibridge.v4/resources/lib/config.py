@@ -73,11 +73,12 @@ class Config:
     # from kodi.log (debug) and set these -- no file editing needed.
     tv_volume_key_up: str = "volume_up"
     tv_volume_key_down: str = "volume_down"
-    # Some remotes DOUBLE-FIRE a volume press as two raw codes: the keymap catches the media key (-> the
-    # takeover), but the SECOND code can leak into another passthrough action. The operator's remote leaks
-    # Vol+ as Kodi button code 61625 and Vol- as 61624, which Kodi resolves to the Audio action -- so a
-    # volume press also hijacked the OPPO's audio track. List those leak button codes here (comma-sep) to
-    # swallow them in the keymap (noop) so they can't cross-fire. Blank = none (normal remotes).
+    # Some remotes DOUBLE-FIRE a volume press: the keymap catches the media key (-> the takeover), but a
+    # SECOND event reaches the passthrough dialog and mis-resolves to another OPPO action. The operator's
+    # remote's Vol+/Vol- (Kodi button codes 61625/61624) leak in as the Audio action, hijacking the disc's
+    # audio track. List those button codes here (comma-sep) and the passthrough dialog SWALLOWS them so a
+    # volume press can't cross-fire. NOT put in the keymap (that would noop the volume keys themselves).
+    # Blank = none (normal remotes). The real Audio button is a different code and is unaffected.
     tv_volume_leak_codes: str = ""
     tv_volume_ir_idle_seconds: float = 60.0  # drop the persistent SSH pipe after this idle gap (internal)
     ir_blaster_timeout: float = 20.0       # overall SSH+sequence timeout (s)

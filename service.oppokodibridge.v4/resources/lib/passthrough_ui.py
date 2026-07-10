@@ -24,7 +24,6 @@ from __future__ import annotations
 import queue
 import threading
 
-import xbmc
 import xbmcgui
 
 from . import passthrough
@@ -38,6 +37,11 @@ class PassthroughDialog(xbmcgui.WindowDialog):
     def __init__(self, config):
         super().__init__()
         self._overrides = passthrough.parse_overrides(getattr(config, "passthrough_key_overrides", ""))
+        # Button codes to SWALLOW: a double-firing remote whose volume keys are handled by the TV-volume
+        # takeover (keymap -> NotifyAll) still deliver a second event here that would otherwise forward a
+        # wrong action (this remote's Vol+/Vol- = 61625/61624 mis-resolve to Audio). Ignored here so the
+        # volume keys can't cross-fire; the real Audio button (a different code) is unaffected.
+        self._ignore = passthrough.parse_ignore_codes(getattr(config, "tv_volume_leak_codes", ""))
         self._client = OppoClient(config)
         # Bounded so a slow/unreachable OPPO can't back up a burst of STALE presses that later replay
         # and jump the disc menu; drop-on-full (newest presses matter more than a stale backlog).
@@ -55,6 +59,11 @@ class PassthroughDialog(xbmcgui.WindowDialog):
 
     def onAction(self, action) -> None:  # noqa: D401 -- Kodi callback
         button = action.getButtonCode()
+        if button in self._ignore:
+            # a volume-takeover key leaking a second event in -- swallow it (do NOT forward), so it
+            # can't cross-fire into another OPPO action while the disc plays.
+            log("passthrough: ignoring volume-takeover leak button={} (not forwarded)".format(button))
+            return
         code = None
         try:
             code = passthrough.resolve(action.getId(), button, self._overrides)
