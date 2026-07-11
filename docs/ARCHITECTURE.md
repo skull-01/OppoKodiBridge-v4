@@ -4,6 +4,10 @@
 blip), monitors playback for the stop (HTTP `/getglobalinfo` polling — the reference-faithful approach,
 all models), and switches the TV using **only legitimate HDMI-CEC** — no IR, no spoofing.
 
+> **This doc is the CEC-handoff deep-dive.** For the whole-system map — including the optional IR
+> TV-switch transports, remote passthrough, and TV volume takeover over IR — see
+> [`SYSTEM_ARCHITECTURE.md`](SYSTEM_ARCHITECTURE.md).
+
 ---
 
 ## The 30-second version

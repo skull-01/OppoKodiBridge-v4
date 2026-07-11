@@ -1,0 +1,69 @@
+<svg width="816" height="850" viewBox="0 0 680 708" role="img" xmlns="http://www.w3.org/2000/svg">
+  <title>OppoKodiBridge v4 — runtime flows</title>
+  <desc>The disc-handoff lifecycle runs six ordered steps in the external player process: Kodi spawns the player, detector checks the file, tvswitch switches the TV to the OPPO, handoff plays over HTTP, monitor watches until idle, and tvswitch reclaims the TV to Kodi in a finally block. Two always-on features run in the service process: volume takeover forwards remote volume keys to the TV over IR, and remote passthrough forwards remote keys to the OPPO over HTTP while a disc plays.</desc>
+  <style>
+    text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+    .t{font-weight:500;font-size:14px;fill:#1c1917}
+    .ts{font-weight:400;font-size:12px;fill:#6b6760}
+    .th{font-weight:600;font-size:14px;fill:#1c1917}
+    .n-teal{fill:#e1f5ee;stroke:#0f6e56;stroke-width:1.5}
+    .n-gray{fill:#f1efe8;stroke:#5f5e5a;stroke-width:1.5}
+    .n-coral{fill:#faece7;stroke:#993c1d;stroke-width:1.5}
+    .eT{stroke:#1d9e75;stroke-width:1.6;fill:none}
+    .eC{stroke:#d85a30;stroke-width:1.6;fill:none}
+    .eG{stroke:#8a857c;stroke-width:1.6;fill:none}
+    .div{stroke:#b4b2a9;stroke-width:1}
+  </style>
+  <defs>
+    <marker id="fT" viewBox="0 0 8 6" refX="6" refY="3" markerWidth="9" markerHeight="9" orient="auto"><path d="M0,0 L6,3 L0,6" fill="none" stroke="#1d9e75" stroke-width="1.4"/></marker>
+    <marker id="fC" viewBox="0 0 8 6" refX="6" refY="3" markerWidth="9" markerHeight="9" orient="auto"><path d="M0,0 L6,3 L0,6" fill="none" stroke="#d85a30" stroke-width="1.4"/></marker>
+    <marker id="fG" viewBox="0 0 8 6" refX="6" refY="3" markerWidth="9" markerHeight="9" orient="auto"><path d="M0,0 L6,3 L0,6" fill="none" stroke="#8a857c" stroke-width="1.4"/></marker>
+  </defs>
+
+  <rect x="0" y="0" width="680" height="708" rx="14" fill="#ffffff" stroke="#e5e3dd" stroke-width="1"/>
+  <text class="th" x="40" y="28" style="font-size:16px">OppoKodiBridge v4 — runtime flows</text>
+
+  <g transform="translate(0,36)">
+    <text class="th" x="34" y="28">disc-handoff lifecycle — external player process (per disc)</text>
+    <g><rect class="n-gray" x="110" y="44" width="460" height="52" rx="8"/><text class="t" x="154" y="66">Kodi plays disc &#8594; external player spawned</text><text class="ts" x="154" y="84">playercorefactory · loads runtime_config.json</text></g>
+    <g><rect class="n-gray" x="110" y="114" width="460" height="52" rx="8"/><text class="t" x="154" y="136">detector.is_handoff_target</text><text class="ts" x="154" y="154">iso / BDMV / VIDEO_TS only, else back to Kodi</text></g>
+    <g><rect class="n-coral" x="110" y="184" width="460" height="52" rx="8"/><text class="t" x="154" y="206">tvswitch.to_oppo()</text><text class="ts" x="154" y="224">CEC grab (power-cycle) or IR blast via Pi</text></g>
+    <g><rect class="n-teal" x="110" y="254" width="460" height="52" rx="8"/><text class="t" x="154" y="276">handoff.play()</text><text class="ts" x="154" y="294">OPPO :436 — wake · NFS mount · play file</text></g>
+    <g><rect class="n-teal" x="110" y="324" width="460" height="52" rx="8"/><text class="t" x="154" y="346">monitor.watch_playback()</text><text class="ts" x="154" y="364">poll :436 until idle · one ISO auto-heal</text></g>
+    <g><rect class="n-coral" x="110" y="394" width="460" height="52" rx="8"/><text class="t" x="154" y="416">tvswitch.to_kodi()  ·  runs in finally</text><text class="ts" x="154" y="434">script.cecreclaim &#8594; CECActivateSource</text></g>
+
+    <circle cx="132" cy="70" r="12" fill="#5f5e5a"/><text class="ts" x="132" y="74" text-anchor="middle" fill="#ffffff">1</text>
+    <circle cx="132" cy="140" r="12" fill="#5f5e5a"/><text class="ts" x="132" y="144" text-anchor="middle" fill="#ffffff">2</text>
+    <circle cx="132" cy="210" r="12" fill="#993c1d"/><text class="ts" x="132" y="214" text-anchor="middle" fill="#ffffff">3</text>
+    <circle cx="132" cy="280" r="12" fill="#0f6e56"/><text class="ts" x="132" y="284" text-anchor="middle" fill="#ffffff">4</text>
+    <circle cx="132" cy="350" r="12" fill="#0f6e56"/><text class="ts" x="132" y="354" text-anchor="middle" fill="#ffffff">5</text>
+    <circle cx="132" cy="420" r="12" fill="#993c1d"/><text class="ts" x="132" y="424" text-anchor="middle" fill="#ffffff">6</text>
+
+    <line class="eG" x1="340" y1="96" x2="340" y2="112" marker-end="url(#fG)"/>
+    <line class="eG" x1="340" y1="166" x2="340" y2="182" marker-end="url(#fG)"/>
+    <line class="eG" x1="340" y1="236" x2="340" y2="252" marker-end="url(#fG)"/>
+    <line class="eG" x1="340" y1="306" x2="340" y2="322" marker-end="url(#fG)"/>
+    <line class="eG" x1="340" y1="376" x2="340" y2="392" marker-end="url(#fG)"/>
+
+    <line class="div" x1="40" y1="474" x2="640" y2="474"/>
+    <text class="th" x="34" y="500">always-on side features — service process</text>
+
+    <text class="ts" x="34" y="520">volume takeover · default-off until a blaster host is set</text>
+    <g><rect class="n-coral" x="44" y="528" width="136" height="46" rx="8"/><text class="t" x="112" y="549" text-anchor="middle">remote Vol&#177;</text><text class="ts" x="112" y="565" text-anchor="middle">user press</text></g>
+    <g><rect class="n-coral" x="196" y="528" width="136" height="46" rx="8"/><text class="t" x="264" y="549" text-anchor="middle">keymap</text><text class="ts" x="264" y="565" text-anchor="middle">NotifyAll okb_vol</text></g>
+    <g><rect class="n-coral" x="348" y="528" width="136" height="46" rx="8"/><text class="t" x="416" y="549" text-anchor="middle">forwarder</text><text class="ts" x="416" y="565" text-anchor="middle">SSH persistent pipe</text></g>
+    <g><rect class="n-coral" x="500" y="528" width="136" height="46" rx="8"/><text class="t" x="568" y="549" text-anchor="middle">Pi &#8594; IR &#8594; TV</text><text class="ts" x="568" y="565" text-anchor="middle">RCA volume code</text></g>
+    <line class="eC" x1="182" y1="551" x2="194" y2="551" marker-end="url(#fC)"/>
+    <line class="eC" x1="334" y1="551" x2="346" y2="551" marker-end="url(#fC)"/>
+    <line class="eC" x1="486" y1="551" x2="498" y2="551" marker-end="url(#fC)"/>
+
+    <text class="ts" x="34" y="598">remote passthrough · default-off, only while a disc plays</text>
+    <g><rect class="n-teal" x="44" y="606" width="136" height="46" rx="8"/><text class="t" x="112" y="627" text-anchor="middle">remote key</text><text class="ts" x="112" y="643" text-anchor="middle">during disc</text></g>
+    <g><rect class="n-teal" x="196" y="606" width="136" height="46" rx="8"/><text class="t" x="264" y="627" text-anchor="middle">capture dialog</text><text class="ts" x="264" y="643" text-anchor="middle">invisible capture</text></g>
+    <g><rect class="n-teal" x="348" y="606" width="136" height="46" rx="8"/><text class="t" x="416" y="627" text-anchor="middle">resolve</text><text class="ts" x="416" y="643" text-anchor="middle">&#8594; OREMOTE code</text></g>
+    <g><rect class="n-teal" x="500" y="606" width="136" height="46" rx="8"/><text class="t" x="568" y="627" text-anchor="middle">OPPO :436</text><text class="ts" x="568" y="643" text-anchor="middle">/sendremotekey</text></g>
+    <line class="eT" x1="182" y1="629" x2="194" y2="629" marker-end="url(#fT)"/>
+    <line class="eT" x1="334" y1="629" x2="346" y2="629" marker-end="url(#fT)"/>
+    <line class="eT" x1="486" y1="629" x2="498" y2="629" marker-end="url(#fT)"/>
+  </g>
+</svg>

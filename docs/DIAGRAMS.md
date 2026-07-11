@@ -6,6 +6,10 @@ Two views of the same pipeline:
    (green = the OPPO grabs the TV on play; blue = Kodi reclaims the TV on stop, via the helper).
 2. **User journey** — what happens, in order, from pressing Play to the TV returning to Kodi on Stop.
 
+> These are the CEC-handoff views. For the **whole-system** component topology and runtime flows (IR
+> transports, remote passthrough, volume takeover), see section 5 below and
+> [`SYSTEM_ARCHITECTURE.md`](SYSTEM_ARCHITECTURE.md).
+
 ---
 
 ## 1 · Architecture & CEC handoff
@@ -206,3 +210,25 @@ sequenceDiagram
 > **M9205 vs M9207:** identical except step 2–3 — the M9205 grabs the TV automatically (power-cycle),
 > the M9207 needs a manual TV switch. Everything else, including HTTP-only stop detection and the
 > automatic reclaim, is the same.
+
+---
+
+## 5 · Whole-system views (all features)
+
+These two cover the full add-on beyond the default CEC handoff — the pluggable TV-switch strategies
+(CEC / IR), remote passthrough, and TV volume takeover over IR. Full write-up in
+[`SYSTEM_ARCHITECTURE.md`](SYSTEM_ARCHITECTURE.md).
+
+### Component topology
+
+![OppoKodiBridge v4 component topology](diagrams/oppokodibridge-v4-component-topology.svg)
+
+> If the image doesn't render, open the SVG directly:
+> [`docs/diagrams/oppokodibridge-v4-component-topology.svg`](diagrams/oppokodibridge-v4-component-topology.svg)
+
+### Runtime flows
+
+![OppoKodiBridge v4 runtime flows](diagrams/oppokodibridge-v4-runtime-flows.svg)
+
+> If the image doesn't render, open the SVG directly:
+> [`docs/diagrams/oppokodibridge-v4-runtime-flows.svg`](diagrams/oppokodibridge-v4-runtime-flows.svg)
