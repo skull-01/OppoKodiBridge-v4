@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OppoKodiBridge v4 — system architecture</title>
+<style>
+  :root{
+    --ground:#F4F7F5; --surface:#FFFFFF; --surface-2:#EDF2EF;
+    --ink:#15211D; --ink-2:#37473F; --muted:#63736C;
+    --border:#DCE4E0; --border-2:#C7D2CC;
+    --accent:#0F7A5E; --accent-ink:#0A5C46;
+    --coral:#BC4728; --purple:#544BC0;
+    --code-bg:#EFF4F1; --board:#FAFBFA; --board-line:#E4E9E6;
+    --shadow:0 1px 2px rgba(16,40,32,.05),0 10px 30px rgba(16,40,32,.06);
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","Cascadia Code","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --ground:#0E1513; --surface:#141F1B; --surface-2:#18241F;
+      --ink:#E9EEEB; --ink-2:#C4CFCA; --muted:#8FA099;
+      --border:#26332E; --border-2:#324039;
+      --accent:#33C79E; --accent-ink:#82E2C7;
+      --coral:#F0805A; --purple:#9E94F0;
+      --code-bg:#101A16; --board:#F7F9F8; --board-line:#E4E9E6;
+      --shadow:0 1px 2px rgba(0,0,0,.32),0 12px 34px rgba(0,0,0,.38);
+    }
+  }
+  :root[data-theme="light"]{
+    --ground:#F4F7F5; --surface:#FFFFFF; --surface-2:#EDF2EF;
+    --ink:#15211D; --ink-2:#37473F; --muted:#63736C;
+    --border:#DCE4E0; --border-2:#C7D2CC;
+    --accent:#0F7A5E; --accent-ink:#0A5C46;
+    --coral:#BC4728; --purple:#544BC0;
+    --code-bg:#EFF4F1; --board:#FAFBFA; --board-line:#E4E9E6;
+    --shadow:0 1px 2px rgba(16,40,32,.05),0 10px 30px rgba(16,40,32,.06);
+  }
+  :root[data-theme="dark"]{
+    --ground:#0E1513; --surface:#141F1B; --surface-2:#18241F;
+    --ink:#E9EEEB; --ink-2:#C4CFCA; --muted:#8FA099;
+    --border:#26332E; --border-2:#324039;
+    --accent:#33C79E; --accent-ink:#82E2C7;
+    --coral:#F0805A; --purple:#9E94F0;
+    --code-bg:#101A16; --board:#F7F9F8; --board-line:#E4E9E6;
+    --shadow:0 1px 2px rgba(0,0,0,.32),0 12px 34px rgba(0,0,0,.38);
+  }
+
+  *{box-sizing:border-box}
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+  body{margin:0}
+  .page{
+    background:var(--ground); color:var(--ink); font-family:var(--sans);
+    font-size:16px; line-height:1.7; -webkit-font-smoothing:antialiased;
+    padding:clamp(20px,5vw,64px) clamp(16px,5vw,40px);
+  }
+  .wrap{max-width:980px; margin:0 auto}
+  .prose{max-width:70ch}
+  a{color:var(--accent-ink); text-decoration:none; border-bottom:1px solid color-mix(in srgb,var(--accent) 40%,transparent)}
+  a:hover{border-bottom-color:var(--accent)}
+  a:focus-visible,button:focus-visible{outline:2px solid var(--accent); outline-offset:3px; border-radius:3px}
+
+  .eyebrow{font-family:var(--mono); font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--accent-ink); margin:0 0 18px}
+  h1{font-size:clamp(2.3rem,6vw,3.4rem); line-height:1.02; letter-spacing:-.025em; font-weight:600; margin:0; text-wrap:balance}
+  .thesis{font-size:clamp(1.05rem,2.2vw,1.32rem); color:var(--ink-2); max-width:60ch; margin:20px 0 0; text-wrap:pretty}
+
+  .chips{display:flex; flex-wrap:wrap; gap:8px; margin:28px 0 0}
+  .chip{font-family:var(--mono); font-size:12px; letter-spacing:.02em; color:var(--ink-2);
+    background:var(--surface); border:1px solid var(--border); border-radius:999px; padding:6px 12px}
+  .chip b{color:var(--accent-ink); font-weight:600}
+
+  .rule{height:1px; background:var(--border); border:0; margin:44px 0}
+
+  nav.toc{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:2px 22px;
+    background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:10px 8px; box-shadow:var(--shadow)}
+  nav.toc a{display:flex; gap:12px; align-items:baseline; padding:9px 12px; border-radius:9px; border-bottom:0; color:var(--ink)}
+  nav.toc a:hover{background:var(--surface-2)}
+  nav.toc .n{font-family:var(--mono); font-size:12px; color:var(--accent-ink); min-width:20px}
+  nav.toc .l{font-size:.95rem}
+
+  section{margin:56px 0 0}
+  .shead{display:flex; align-items:baseline; gap:16px; margin:0 0 20px; padding-bottom:14px; border-bottom:1px solid var(--border)}
+  .shead .idx{font-family:var(--mono); font-size:13px; font-weight:600; color:var(--accent-ink); letter-spacing:.04em}
+  .shead h2{font-size:clamp(1.4rem,3vw,1.75rem); font-weight:600; letter-spacing:-.015em; margin:0; text-wrap:balance}
+  h3{font-size:1.06rem; font-weight:600; letter-spacing:-.01em; margin:30px 0 8px}
+  p{margin:0 0 16px}
+  code,.mono{font-family:var(--mono); font-size:.88em}
+  p code,li code,td code{background:var(--code-bg); border:1px solid var(--border); border-radius:5px; padding:1px 6px; color:var(--ink)}
+
+  .cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px; margin:8px 0 0}
+  .card{background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:20px; box-shadow:var(--shadow)}
+  .card .tag{font-family:var(--mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase; margin:0 0 10px}
+  .card h4{margin:0 0 6px; font-size:1.02rem; font-weight:600; letter-spacing:-.01em}
+  .card p{margin:0; color:var(--ink-2); font-size:.95rem; line-height:1.6}
+  .t-teal{color:var(--accent-ink)} .t-coral{color:var(--coral)} .t-purple{color:var(--purple)}
+  .bar-teal{box-shadow:inset 3px 0 0 var(--accent)} .bar-coral{box-shadow:inset 3px 0 0 var(--coral)} .bar-purple{box-shadow:inset 3px 0 0 var(--purple)}
+
+  figure{margin:0}
+  .board{background:var(--board); border:1px solid var(--board-line); border-radius:16px; padding:clamp(10px,2vw,18px); overflow-x:auto; box-shadow:var(--shadow)}
+  .board svg{display:block; width:100%; height:auto; min-width:600px; margin:0 auto}
+  figcaption{font-size:.85rem; color:var(--muted); margin:12px 2px 0; font-family:var(--mono); letter-spacing:.01em}
+
+  .tablewrap{overflow-x:auto; border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); margin:6px 0 0}
+  table{border-collapse:collapse; width:100%; min-width:560px; font-size:.92rem; background:var(--surface)}
+  caption{text-align:left; font-family:var(--mono); font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); padding:14px 16px 0}
+  th,td{text-align:left; padding:11px 16px; border-bottom:1px solid var(--border); vertical-align:top}
+  thead th{font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:600; background:var(--surface-2)}
+  tbody tr:last-child td{border-bottom:0}
+  td .fn{font-family:var(--mono); font-size:.86rem; color:var(--accent-ink); font-weight:600; white-space:nowrap}
+  td .sub{color:var(--muted); font-size:.82rem}
+
+  .procs{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:20px 0 0}
+  @media (max-width:640px){.procs{grid-template-columns:1fr}}
+  .proc{background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:20px; box-shadow:var(--shadow)}
+  .proc .kicker{font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted)}
+  .proc h4{margin:8px 0 4px; font-size:1.05rem; font-weight:600}
+  .proc .file{font-family:var(--mono); font-size:.82rem; color:var(--accent-ink)}
+  .proc p{margin:12px 0 0; font-size:.93rem; color:var(--ink-2); line-height:1.6}
+  .note{background:var(--surface-2); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:0 12px 12px 0; padding:14px 18px; margin:20px 0 0; font-size:.95rem; color:var(--ink-2)}
+
+  ol.steps{margin:6px 0 0; padding:0; list-style:none; counter-reset:s}
+  ol.steps li{counter-increment:s; position:relative; padding:14px 0 14px 46px; border-bottom:1px solid var(--border)}
+  ol.steps li:last-child{border-bottom:0}
+  ol.steps li::before{content:counter(s); position:absolute; left:0; top:12px; width:28px; height:28px; display:grid; place-items:center;
+    font-family:var(--mono); font-size:13px; font-weight:600; color:var(--accent-ink); background:var(--surface-2); border:1px solid var(--border); border-radius:8px}
+  ol.steps b{font-weight:600}
+  ol.steps .d{color:var(--ink-2)}
+
+  footer{margin:64px 0 0; padding-top:24px; border-top:1px solid var(--border); color:var(--muted); font-size:.9rem}
+  footer .meta{font-family:var(--mono); font-size:.82rem; margin:0 0 10px}
+  footer .links{display:flex; flex-wrap:wrap; gap:8px 18px}
+
+  .fade{opacity:0; transform:translateY(10px); animation:rise .6s cubic-bezier(.2,.7,.2,1) forwards}
+  .fade:nth-child(2){animation-delay:.05s} .fade:nth-child(3){animation-delay:.1s}
+  @keyframes rise{to{opacity:1; transform:none}}
+  @media (prefers-reduced-motion:reduce){.fade{animation:none; opacity:1; transform:none}}
+</style>
+</head>
+<body>
+<div class="page">
+<div class="wrap">
+
+  <p class="sr-only">System architecture for OppoKodiBridge v4, a Kodi add-on that hands Blu-ray disc playback to a physical OPPO player. Covers the two-process design, a component topology diagram, runtime flow diagrams, the TV-switch strategy family, a module reference, external protocols, and design principles.</p>
+
+  <header class="fade">
+    <p class="eyebrow">Kodi add-on &middot; system architecture</p>
+    <h1>OppoKodiBridge&nbsp;v4</h1>
+    <p class="thesis">No-blip Blu-ray handoff — Kodi routes a disc to a physical OPPO player, switches the TV to it, drives it over the network, and reclaims the TV on stop.</p>
+    <div class="chips">
+      <span class="chip"><b>2</b> processes</span>
+      <span class="chip"><b>4</b> physical devices</span>
+      <span class="chip">CEC &middot; IR &middot; HTTP &middot; SSH &middot; NFS</span>
+      <span class="chip"><b>~332</b> off-box tests</span>
+      <span class="chip">default switch: <b>CEC</b></span>
+    </div>
+  </header>
+
+  <hr class="rule">
+
+  <nav class="toc fade" aria-label="Contents">
+    <a href="#core"><span class="n">01</span><span class="l">The core idea</span></a>
+    <a href="#topology"><span class="n">02</span><span class="l">Component topology</span></a>
+    <a href="#flows"><span class="n">03</span><span class="l">Runtime flows</span></a>
+    <a href="#strategies"><span class="n">04</span><span class="l">TV-switch strategies</span></a>
+    <a href="#modules"><span class="n">05</span><span class="l">Module reference</span></a>
+    <a href="#protocols"><span class="n">06</span><span class="l">Interfaces &amp; protocols</span></a>
+    <a href="#principles"><span class="n">07</span><span class="l">Design principles</span></a>
+  </nav>
+
+  <section id="core">
+    <div class="shead"><span class="idx">01</span><h2>The core idea</h2></div>
+    <div class="prose">
+      <p>v4's defining move is <b>no-blip handoff via Kodi's playercorefactory</b>. Instead of a service that lets Kodi start a disc and then yanks it back (the v2 "blip"), the service writes a <code>playercorefactory.xml</code> that routes <code>.iso</code> / BDMV / VIDEO_TS content to an <b>external player</b> before Kodi's own player ever opens the file.</p>
+      <p>That one decision splits the add-on into two processes with a JSON file as the bridge between them.</p>
+    </div>
+    <div class="procs">
+      <div class="proc bar-purple">
+        <span class="kicker">in-Kodi &middot; long-lived</span>
+        <h4>Service process</h4>
+        <span class="file">service.py &rarr; service_cec.main()</span>
+        <p>The only code with <code>xbmcaddon</code> access. Publishes <code>runtime_config.json</code>, installs the <code>playercorefactory.xml</code>, and hosts the two always-on features (volume takeover, remote passthrough). Never intercepts playback.</p>
+      </div>
+      <div class="proc bar-purple">
+        <span class="kicker">external &middot; per disc</span>
+        <h4>External player process</h4>
+        <span class="file">pcf_player.py &rarr; orchestrator.run()</span>
+        <p>Spawned by Kodi for each disc, runs outside Kodi, reads the published <code>runtime_config.json</code>. The entire handoff lifecycle — detect, switch, play, watch, reclaim — lives here.</p>
+      </div>
+    </div>
+    <div class="note">A third, separate companion add-on — <code>script.cecreclaim</code> — runs inside Kodi purely to re-announce Kodi's own HDMI-CEC active source on stop, so the TV returns to Kodi.</div>
+  </section>
+
+  <section id="topology">
+    <div class="shead"><span class="idx">02</span><h2>Component topology</h2></div>
+    <div class="prose"><p>The Kodi host holds the software; the four physical devices sit outside it. Every link is labelled with its protocol — HTTP <code>:436</code> (OPPO app API), SSH (to the Pi IR blaster), JSON-RPC <code>:8080</code> (localhost, into Kodi), plus HDMI-CEC and IR.</p></div>
+    <figure>
+      <div class="board">
+<svg viewBox="0 0 680 446" role="img" xmlns="http://www.w3.org/2000/svg">
+  <title>OppoKodiBridge v4 component topology</title>
+  <desc>The Kodi host runs the OppoKodiBridge add-on, the Kodi core, and the script.cecreclaim helper. These reach four physical devices — the OPPO player, a Raspberry Pi IR blaster, the TV, and an NFS share — over HTTP on port 436, SSH, JSON-RPC on port 8080, HDMI-CEC and IR.</desc>
+  <style>
+    #topo text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+    #topo .t{font-weight:500;font-size:14px;fill:#1c1917}
+    #topo .ts{font-weight:400;font-size:12px;fill:#6b6760}
+    #topo .th{font-weight:600;font-size:14px;fill:#1c1917}
+    #topo .box{fill:#f7f6f3;stroke:#b4b2a9;stroke-width:1.5}
+    #topo .n-purple{fill:#eeedfe;stroke:#534ab7;stroke-width:1.5}
+    #topo .n-teal{fill:#e1f5ee;stroke:#0f6e56;stroke-width:1.5}
+    #topo .n-gray{fill:#f1efe8;stroke:#5f5e5a;stroke-width:1.5}
+    #topo .eT{stroke:#1d9e75;stroke-width:1.6;fill:none}
+    #topo .eC{stroke:#d85a30;stroke-width:1.6;fill:none}
+    #topo .eG{stroke:#8a857c;stroke-width:1.5;fill:none}
+    #topo .dash{stroke-dasharray:5 4}
+  </style>
+  <defs>
+    <marker id="ahT" viewBox="0 0 8 6" refX="6" refY="3" markerWidth="9" markerHeight="9" orient="auto"><path d="M0,0 L6,3 L0,6" fill="none" stroke="#1d9e75" stroke-width="1.4"/></marker>
+    <marker id="ahC" viewBox="0 0 8 6" refX="6" refY="3" markerWidth="9" markerHeight="9" orient="auto"><path d="M0,0 L6,3 L0,6" fill="none" stroke="#d85a30" stroke-width="1.4"/></marker>
+    <marker id="ahG" viewBox="0 0 8 6" refX="6" refY="3" markerWidth="9" markerHeight="9" orient="auto"><path d="M0,0 L6,3 L0,6" fill="none" stroke="#8a857c" stroke-width="1.4"/></marker>
+  </defs>
+  <g id="topo">
+  <rect x="0" y="0" width="680" height="446" rx="14" fill="#ffffff" stroke="#e5e3dd" stroke-width="1"/>
+  <text class="th" x="40" y="28" style="font-size:16px">OppoKodiBridge v4 — component topology</text>
+  <g transform="translate(0,36)">
+    <text class="th" x="34" y="46">Kodi host — CoreELEC (Ugoos)</text>
+    <text class="th" x="446" y="46">physical devices</text>
+    <rect class="box" x="30" y="54" width="278" height="286" rx="12"/>
+    <rect class="box" x="440" y="54" width="210" height="302" rx="12"/>
+    <g><rect class="n-gray" x="44" y="72" width="250" height="58" rx="8"/><text class="t" x="169" y="97" text-anchor="middle">Kodi</text><text class="ts" x="169" y="115" text-anchor="middle">playercorefactory · CEC · RPC</text></g>
+    <g><rect class="n-purple" x="44" y="156" width="250" height="58" rx="8"/><text class="t" x="169" y="181" text-anchor="middle">OppoKodiBridge add-on</text><text class="ts" x="169" y="199" text-anchor="middle">service + external-player</text></g>
+    <g><rect class="n-gray" x="44" y="248" width="250" height="58" rx="8"/><text class="t" x="169" y="273" text-anchor="middle">script.cecreclaim</text><text class="ts" x="169" y="291" text-anchor="middle">CEC helper add-on</text></g>
+    <g><rect class="n-teal" x="452" y="72" width="186" height="54" rx="8"/><text class="t" x="545" y="95" text-anchor="middle">OPPO 4K player</text><text class="ts" x="545" y="112" text-anchor="middle">M920x · app API :436</text></g>
+    <g><rect class="n-teal" x="452" y="150" width="186" height="54" rx="8"/><text class="t" x="545" y="173" text-anchor="middle">NFS share / proxy</text><text class="ts" x="545" y="190" text-anchor="middle">media source</text></g>
+    <g><rect class="n-teal" x="452" y="224" width="186" height="54" rx="8"/><text class="t" x="545" y="247" text-anchor="middle">Raspberry Pi</text><text class="ts" x="545" y="264" text-anchor="middle">IR blaster · ir-ctl</text></g>
+    <g><rect class="n-teal" x="452" y="300" width="186" height="54" rx="8"/><text class="t" x="545" y="323" text-anchor="middle">TCL TV</text><text class="ts" x="545" y="340" text-anchor="middle">HDMI-CEC + IR</text></g>
+    <line class="eG dash" x1="169" y1="130" x2="169" y2="154" marker-end="url(#ahG)"/>
+    <text class="ts" x="176" y="146">spawns player</text>
+    <line class="eG dash" x1="169" y1="214" x2="169" y2="246" marker-end="url(#ahG)"/>
+    <text class="ts" x="176" y="234">JSON-RPC :8080</text>
+    <line class="eT" x1="294" y1="180" x2="450" y2="100" marker-end="url(#ahT)"/>
+    <text class="ts" x="350" y="126">HTTP :436</text>
+    <line class="eC" x1="294" y1="200" x2="450" y2="248" marker-end="url(#ahC)"/>
+    <text class="ts" x="328" y="240">SSH &#8594; ir-ctl</text>
+    <line class="eT" x1="294" y1="278" x2="450" y2="322" marker-end="url(#ahT)"/>
+    <text class="ts" x="330" y="312">HDMI-CEC</text>
+    <line class="eT" x1="545" y1="126" x2="545" y2="148" marker-end="url(#ahT)"/>
+    <text class="ts" x="552" y="141">mounts</text>
+    <line class="eC" x1="545" y1="278" x2="545" y2="298" marker-end="url(#ahC)"/>
+    <text class="ts" x="552" y="292">IR</text>
+    <rect class="n-purple" x="40" y="366" width="12" height="12" rx="2"/><text class="ts" x="58" y="376">our software</text>
+    <rect class="n-teal" x="150" y="366" width="12" height="12" rx="2"/><text class="ts" x="168" y="376">device</text>
+    <rect class="n-gray" x="248" y="366" width="12" height="12" rx="2"/><text class="ts" x="266" y="376">Kodi / helper</text>
+    <line class="eT" x1="40" y1="392" x2="60" y2="392"/><text class="ts" x="66" y="396">data / AV</text>
+    <line class="eC" x1="150" y1="392" x2="170" y2="392"/><text class="ts" x="176" y="396">IR</text>
+    <line class="eG dash" x1="210" y1="392" x2="230" y2="392"/><text class="ts" x="236" y="396">spawn / RPC</text>
+  </g>
+  </g>
+</svg>
+      </div>
+      <figcaption>Kodi host software (left) reaches four physical devices (right); edge colour encodes flow role.</figcaption>
+    </figure>
+  </section>
+
+  <section id="flows">
+    <div class="shead"><span class="idx">03</span><h2>Runtime flows</h2></div>
+    <figure>
+      <div class="board">
+<svg viewBox="0 0 680 708" role="img" xmlns="http://www.w3.org/2000/svg">
+  <title>OppoKodiBridge v4 runtime flows</title>
+  <desc>The disc-handoff lifecycle runs six ordered steps in the external player process: Kodi spawns the player, detector checks the file, tvswitch switches the TV to the OPPO, handoff plays over HTTP, monitor watches until idle, and tvswitch reclaims the TV to Kodi in a finally block. Two always-on features run in the service process: volume takeover forwards remote volume keys to the TV over IR, and remote passthrough forwards remote keys to the OPPO over HTTP while a disc plays.</desc>
+  <style>
+    #flows text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+    #flows .t{font-weight:500;font-size:14px;fill:#1c1917}
+    #flows .ts{font-weight:400;font-size:12px;fill:#6b6760}
+    #flows .th{font-weight:600;font-size:14px;fill:#1c1917}
+    #flows .n-teal{fill:#e1f5ee;stroke:#0f6e56;stroke-width:1.5}
+    #flows .n-gray{fill:#f1efe8;stroke:#5f5e5a;stroke-width:1.5}
+    #flows .n-coral{fill:#faece7;stroke:#993c1d;stroke-width:1.5}
+    #flows .eT{stroke:#1d9e75;stroke-width:1.6;fill:none}
+    #flows .eC{stroke:#d85a30;stroke-width:1.6;fill:none}
+    #flows .eG{stroke:#8a857c;stroke-width:1.6;fill:none}
+    #flows .div{stroke:#b4b2a9;stroke-width:1}
+  </style>
+  <defs>
+    <marker id="fT" viewBox="0 0 8 6" refX="6" refY="3" markerWidth="9" markerHeight="9" orient="auto"><path d="M0,0 L6,3 L0,6" fill="none" stroke="#1d9e75" stroke-width="1.4"/></marker>
+    <marker id="fC" viewBox="0 0 8 6" refX="6" refY="3" markerWidth="9" markerHeight="9" orient="auto"><path d="M0,0 L6,3 L0,6" fill="none" stroke="#d85a30" stroke-width="1.4"/></marker>
+    <marker id="fG" viewBox="0 0 8 6" refX="6" refY="3" markerWidth="9" markerHeight="9" orient="auto"><path d="M0,0 L6,3 L0,6" fill="none" stroke="#8a857c" stroke-width="1.4"/></marker>
+  </defs>
+  <g id="flows">
+  <rect x="0" y="0" width="680" height="708" rx="14" fill="#ffffff" stroke="#e5e3dd" stroke-width="1"/>
+  <text class="th" x="40" y="28" style="font-size:16px">OppoKodiBridge v4 — runtime flows</text>
+  <g transform="translate(0,36)">
+    <text class="th" x="34" y="28">disc-handoff lifecycle — external player process (per disc)</text>
+    <g><rect class="n-gray" x="110" y="44" width="460" height="52" rx="8"/><text class="t" x="154" y="66">Kodi plays disc &#8594; external player spawned</text><text class="ts" x="154" y="84">playercorefactory · loads runtime_config.json</text></g>
+    <g><rect class="n-gray" x="110" y="114" width="460" height="52" rx="8"/><text class="t" x="154" y="136">detector.is_handoff_target</text><text class="ts" x="154" y="154">iso / BDMV / VIDEO_TS only, else back to Kodi</text></g>
+    <g><rect class="n-coral" x="110" y="184" width="460" height="52" rx="8"/><text class="t" x="154" y="206">tvswitch.to_oppo()</text><text class="ts" x="154" y="224">CEC grab (power-cycle) or IR blast via Pi</text></g>
+    <g><rect class="n-teal" x="110" y="254" width="460" height="52" rx="8"/><text class="t" x="154" y="276">handoff.play()</text><text class="ts" x="154" y="294">OPPO :436 — wake · NFS mount · play file</text></g>
+    <g><rect class="n-teal" x="110" y="324" width="460" height="52" rx="8"/><text class="t" x="154" y="346">monitor.watch_playback()</text><text class="ts" x="154" y="364">poll :436 until idle · one ISO auto-heal</text></g>
+    <g><rect class="n-coral" x="110" y="394" width="460" height="52" rx="8"/><text class="t" x="154" y="416">tvswitch.to_kodi()  ·  runs in finally</text><text class="ts" x="154" y="434">script.cecreclaim &#8594; CECActivateSource</text></g>
+    <circle cx="132" cy="70" r="12" fill="#5f5e5a"/><text class="ts" x="132" y="74" text-anchor="middle" fill="#ffffff">1</text>
+    <circle cx="132" cy="140" r="12" fill="#5f5e5a"/><text class="ts" x="132" y="144" text-anchor="middle" fill="#ffffff">2</text>
+    <circle cx="132" cy="210" r="12" fill="#993c1d"/><text class="ts" x="132" y="214" text-anchor="middle" fill="#ffffff">3</text>
+    <circle cx="132" cy="280" r="12" fill="#0f6e56"/><text class="ts" x="132" y="284" text-anchor="middle" fill="#ffffff">4</text>
+    <circle cx="132" cy="350" r="12" fill="#0f6e56"/><text class="ts" x="132" y="354" text-anchor="middle" fill="#ffffff">5</text>
+    <circle cx="132" cy="420" r="12" fill="#993c1d"/><text class="ts" x="132" y="424" text-anchor="middle" fill="#ffffff">6</text>
+    <line class="eG" x1="340" y1="96" x2="340" y2="112" marker-end="url(#fG)"/>
+    <line class="eG" x1="340" y1="166" x2="340" y2="182" marker-end="url(#fG)"/>
+    <line class="eG" x1="340" y1="236" x2="340" y2="252" marker-end="url(#fG)"/>
+    <line class="eG" x1="340" y1="306" x2="340" y2="322" marker-end="url(#fG)"/>
+    <line class="eG" x1="340" y1="376" x2="340" y2="392" marker-end="url(#fG)"/>
+    <line class="div" x1="40" y1="474" x2="640" y2="474"/>
+    <text class="th" x="34" y="500">always-on side features — service process</text>
+    <text class="ts" x="34" y="520">volume takeover · default-off until a blaster host is set</text>
+    <g><rect class="n-coral" x="44" y="528" width="136" height="46" rx="8"/><text class="t" x="112" y="549" text-anchor="middle">remote Vol&#177;</text><text class="ts" x="112" y="565" text-anchor="middle">user press</text></g>
+    <g><rect class="n-coral" x="196" y="528" width="136" height="46" rx="8"/><text class="t" x="264" y="549" text-anchor="middle">keymap</text><text class="ts" x="264" y="565" text-anchor="middle">NotifyAll okb_vol</text></g>
+    <g><rect class="n-coral" x="348" y="528" width="136" height="46" rx="8"/><text class="t" x="416" y="549" text-anchor="middle">forwarder</text><text class="ts" x="416" y="565" text-anchor="middle">SSH persistent pipe</text></g>
+    <g><rect class="n-coral" x="500" y="528" width="136" height="46" rx="8"/><text class="t" x="568" y="549" text-anchor="middle">Pi &#8594; IR &#8594; TV</text><text class="ts" x="568" y="565" text-anchor="middle">RCA volume code</text></g>
+    <line class="eC" x1="182" y1="551" x2="194" y2="551" marker-end="url(#fC)"/>
+    <line class="eC" x1="334" y1="551" x2="346" y2="551" marker-end="url(#fC)"/>
+    <line class="eC" x1="486" y1="551" x2="498" y2="551" marker-end="url(#fC)"/>
+    <text class="ts" x="34" y="598">remote passthrough · default-off, only while a disc plays</text>
+    <g><rect class="n-teal" x="44" y="606" width="136" height="46" rx="8"/><text class="t" x="112" y="627" text-anchor="middle">remote key</text><text class="ts" x="112" y="643" text-anchor="middle">during disc</text></g>
+    <g><rect class="n-teal" x="196" y="606" width="136" height="46" rx="8"/><text class="t" x="264" y="627" text-anchor="middle">capture dialog</text><text class="ts" x="264" y="643" text-anchor="middle">invisible capture</text></g>
+    <g><rect class="n-teal" x="348" y="606" width="136" height="46" rx="8"/><text class="t" x="416" y="627" text-anchor="middle">resolve</text><text class="ts" x="416" y="643" text-anchor="middle">&#8594; OREMOTE code</text></g>
+    <g><rect class="n-teal" x="500" y="606" width="136" height="46" rx="8"/><text class="t" x="568" y="627" text-anchor="middle">OPPO :436</text><text class="ts" x="568" y="643" text-anchor="middle">/sendremotekey</text></g>
+    <line class="eT" x1="182" y1="629" x2="194" y2="629" marker-end="url(#fT)"/>
+    <line class="eT" x1="334" y1="629" x2="346" y2="629" marker-end="url(#fT)"/>
+    <line class="eT" x1="486" y1="629" x2="498" y2="629" marker-end="url(#fT)"/>
+  </g>
+  </g>
+</svg>
+      </div>
+      <figcaption>Six-step handoff spine (top) plus the two always-on features that live in the service process (bottom).</figcaption>
+    </figure>
+
+    <h3>Disc-handoff lifecycle</h3>
+    <p class="prose"><code>orchestrator.run</code> is a clean linear flow — single-shot and event-tied.</p>
+    <ol class="steps prose">
+      <li><b>Kodi plays a disc</b> <span class="d">— playercorefactory routes it to <code>pcf_player.py</code>, which loads <code>runtime_config.json</code>.</span></li>
+      <li><b>detector.is_handoff_target</b> <span class="d">— accept only <code>.iso</code> / BDMV / VIDEO_TS; anything else goes back to Kodi.</span></li>
+      <li><b>tvswitch.to_oppo()</b> <span class="d">— switch the TV to the OPPO input (CEC grab or IR blast — see below).</span></li>
+      <li><b>handoff.play()</b> <span class="d">— drive the OPPO over <code>:436</code>: wake &rarr; init &rarr; NFS login/mount &rarr; play. Mount and play are hard gates (abort-before-play on an unconfirmed mount).</span></li>
+      <li><b>monitor.watch_playback()</b> <span class="d">— poll <code>/getglobalinfo</code> until idle; one ISO auto-heal re-issue, bounded so it always returns.</span></li>
+      <li><b>tvswitch.to_kodi()</b> <span class="d">— reclaim the TV, in a <code>finally</code> so it runs whether playback succeeded or failed. No standing re-asserter, so a manual input change sticks.</span></li>
+    </ol>
+
+    <h3>Volume takeover over IR</h3>
+    <p class="prose">The M920x's network volume is inert, so the remote's Vol&#177; drive the <b>TV</b> over IR instead: a Kodi keymap remaps the volume keys to <code>NotifyAll</code>; <code>onNotification</code> maps it to an RCA code; a worker thread fires it at the TV through a persistent SSH pipe to the Pi.</p>
+
+    <h3>Remote passthrough</h3>
+    <p class="prose">While a handed-off disc plays, an invisible full-screen dialog captures the remote, resolves each key to an OPPO OREMOTE code, and forwards it over <code>:436 /sendremotekey</code> on a worker thread — so you can drive the Blu-ray menu.</p>
+  </section>
+
+  <section id="strategies">
+    <div class="shead"><span class="idx">04</span><h2>TV-switch strategies</h2></div>
+    <p class="prose"><code>tvswitch.make_switcher()</code> selects an implementation from <code>tv_switch_method</code>, all behind one <code>to_oppo()</code> / <code>to_kodi()</code> contract — each single-shot, non-fatal, returning an honest bool. The default <code>cec</code> reproduces the original inline behaviour exactly; IR transports load lazily.</p>
+    <div class="tablewrap">
+      <table>
+        <caption>tv_switch_method</caption>
+        <thead><tr><th>Method</th><th>to_oppo() — play</th><th>to_kodi() — stop</th><th>Module</th><th>Host</th></tr></thead>
+        <tbody>
+          <tr><td><span class="fn">none</span></td><td>no-op (manual)</td><td>no-op</td><td>tvswitch.NullSwitcher</td><td>—</td></tr>
+          <tr><td><span class="fn">cec</span> <span class="sub">default</span></td><td>model-gated OPPO one-touch-play grab (power-cycle)</td><td>Kodi self-reclaim</td><td>cec.py</td><td>Kodi host</td></tr>
+          <tr><td><span class="fn">ir</span></td><td>blast TV HDMI-input NEC over serial ZJIoT module</td><td>CEC reclaim</td><td>ir_zjiot.py + ir_proto.py</td><td>Kodi host (USB-TTL)</td></tr>
+          <tr><td><span class="fn">lirc</span></td><td>blast NEC on local <code>/dev/lirc0</code> via <code>ir-ctl</code></td><td>CEC reclaim</td><td>ir_lirc.py</td><td>Kodi host (GPIO)</td></tr>
+          <tr><td><span class="fn">ir_remote</span></td><td>SSH to a Pi; drive the TCL RCA-15 input picker</td><td>CEC reclaim</td><td>ir_remote.py</td><td>Raspberry Pi</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="modules">
+    <div class="shead"><span class="idx">05</span><h2>Module reference</h2></div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>service lifecycle &amp; orchestration</caption>
+        <thead><tr><th>Module</th><th>Role</th></tr></thead>
+        <tbody>
+          <tr><td><span class="fn">service.py</span></td><td>Add-on entry (<code>library="service.py"</code>); delegates to <code>service_cec.main()</code>.</td></tr>
+          <tr><td><span class="fn">service_cec.py</span></td><td>The long-lived service: publishes <code>runtime_config.json</code>, installs/removes <code>playercorefactory.xml</code>, syncs the volume keymap + runs the forwarder, runs the passthrough tick loop. <code>onNotification</code> is the volume fast-path.</td></tr>
+          <tr><td><span class="fn">pcf_player.py</span></td><td>The external player Kodi spawns per disc. Runs outside Kodi, loads config, calls <code>orchestrator.run</code>, never crashes the player process (exit 0/1/2).</td></tr>
+          <tr><td><span class="fn">orchestrator.py</span></td><td>The flow: detect &rarr; to_oppo &rarr; play &rarr; watch &rarr; to_kodi (in <code>finally</code>) + a best-effort give-up STOP.</td></tr>
+          <tr><td><span class="fn">monitor.py</span></td><td>Two-phase HTTP watch (start-with-auto-heal, then watch-until-idle); tri-state so a blip isn't a stop; bounded so it always returns.</td></tr>
+          <tr><td><span class="fn">kodilog.py</span></td><td>Logging shim — <code>xbmc.log</code> in Kodi, <code>print</code> off-box (keeps pure modules importable in tests).</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="tablewrap" style="margin-top:20px">
+      <table>
+        <caption>handoff, detection, config &amp; wizard</caption>
+        <thead><tr><th>Module</th><th>Role</th></tr></thead>
+        <tbody>
+          <tr><td><span class="fn">handoff.py</span></td><td>Headless OPPO playback over the HTTP app API: wake &rarr; init &rarr; NFS login/mount &rarr; play. No TV switching, no monitoring. Cooperatively abortable.</td></tr>
+          <tr><td><span class="fn">detector.py</span></td><td>Pure disc classifier (<code>is_handoff_target</code>) and the source of <code>PCF_RULES</code>, both from the same constants so XML and runtime can't drift.</td></tr>
+          <tr><td><span class="fn">config.py</span></td><td>Kodi-free <code>Config</code> dataclass (~60 fields) + the only Kodi-aware loader <code>from_addon()</code> + per-model OPPO IP resolution.</td></tr>
+          <tr><td><span class="fn">pcf.py</span></td><td>Builds + installs/uninstalls <code>playercorefactory.xml</code>; XML-escapes all values; only ever touches a file carrying its own marker.</td></tr>
+          <tr><td><span class="fn">wizard.py</span> <span class="sub">(lib)</span></td><td>First-run wizard logic behind ui/settings/client adapters (unit-testable off-box).</td></tr>
+          <tr><td><span class="fn">wizard.py</span> <span class="sub">(root)</span></td><td>Kodi <code>RunScript</code> entry + the real <code>xbmcgui</code>/settings adapters; <code>firstrun</code> guard reads <code>wizard_done</code>.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="tablewrap" style="margin-top:20px">
+      <table>
+        <caption>OPPO control · TV switching &amp; IR</caption>
+        <thead><tr><th>Module</th><th>Role</th></tr></thead>
+        <tbody>
+          <tr><td><span class="fn">oppo_http.py</span></td><td><code>OppoClient</code> + parse helpers for the OPPO/M920x app API: wake, NFS login/mount, play, <code>sendremotekey</code>, playback probes; plus <code>:23</code> IP-control (<code>#POF</code>/<code>#PON</code>) and optional RS-232. Mount/play/stop never retry.</td></tr>
+          <tr><td><span class="fn">tvswitch.py</span></td><td>Strategy factory + the <code>to_oppo()</code>/<code>to_kodi()</code> contract; lazily imports the selected transport.</td></tr>
+          <tr><td><span class="fn">cec.py</span></td><td>The only place CEC is asserted: model-gated OPPO grab + Kodi reclaim (JSON-RPC &rarr; <code>script.cecreclaim</code>) + <code>kodi_video_sources</code>. Never raises.</td></tr>
+          <tr><td><span class="fn">ir_remote.py</span></td><td>SSH remote-blaster: one-shot input-picker sequence for <code>to_oppo</code>, plus a persistent SSH pipe for rapid volume keys. RCA-15 frames.</td></tr>
+          <tr><td><span class="fn">ir_zjiot.py</span></td><td>Serial ZJIoT transport: NEC-carrying module frame over raw POSIX <code>termios</code>. Ships default-off.</td></tr>
+          <tr><td><span class="fn">ir_lirc.py</span></td><td>Local LIRC transport: <code>ir-ctl -S nec:&lt;scancode&gt;</code> on the host's <code>/dev/lirc0</code>.</td></tr>
+          <tr><td><span class="fn">ir_proto.py</span></td><td>Pure codec: ZJIoT frame format + NEC pulse/space waveform synthesis. No I/O.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="tablewrap" style="margin-top:20px">
+      <table>
+        <caption>passthrough · volume takeover · helper</caption>
+        <thead><tr><th>Module</th><th>Role</th></tr></thead>
+        <tbody>
+          <tr><td><span class="fn">passthrough.py</span></td><td>Pure core: map a Kodi action/button-code &rarr; OREMOTE key (<code>resolve</code>), parse overrides + ignore/leak codes, and the arm/disarm decision.</td></tr>
+          <tr><td><span class="fn">passthrough_ui.py</span></td><td>Kodi runtime: <code>PassthroughRunner</code> polls OPPO state and opens/closes an invisible <code>WindowDialog</code> that forwards keys on a bounded-queue worker thread.</td></tr>
+          <tr><td><span class="fn">volumeir.py</span></td><td>Generates the takeover keymap; matches the <code>NotifyAll</code> to an RCA code; <code>VolumeIrForwarder</code> (daemon thread + persistent IR pipe) fires it. Config refresh is generation-counted (no restart).</td></tr>
+          <tr><td><span class="fn">script.cecreclaim</span> <span class="sub">helper add-on</span></td><td>Separate package (<code>addon.xml</code> + <code>default.py</code>): a single-shot <code>CECActivateSource</code> so Kodi re-announces its own active source. Installed alongside the main add-on.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="protocols">
+    <div class="shead"><span class="idx">06</span><h2>External interfaces &amp; protocols</h2></div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Interface</th><th>Transport</th><th>Used by</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>OPPO app API</td><td><span class="fn">HTTP GET :436</span></td><td>oppo_http</td><td>getglobalinfo, loginNfsServer, mountNfsSharedFolder, playnormalfile, checkfolderhasBDMV, sendremotekey, …</td></tr>
+          <tr><td>OPPO wake</td><td><span class="fn">UDP :7624</span></td><td>wake_and_wait</td><td><code>NOTIFY OREMOTE LOGIN</code> packet</td></tr>
+          <tr><td>OPPO IP-control</td><td><span class="fn">TCP :23</span></td><td>cec.grab_oppo</td><td><code>#POF</code> / <code>#PON</code> (M9205 grab only)</td></tr>
+          <tr><td>Kodi control</td><td><span class="fn">JSON-RPC 127.0.0.1:8080</span></td><td>cec.py</td><td>ExecuteAddon(script.cecreclaim), Files.GetSources — needs Kodi's web server on</td></tr>
+          <tr><td>Pi IR blaster</td><td><span class="fn">SSH &rarr; ir-ctl &rarr; /dev/lirc0</span></td><td>ir_remote</td><td>one-shot switch + persistent volume pipe</td></tr>
+          <tr><td>Media</td><td><span class="fn">NFS</span></td><td>OPPO ← handoff</td><td>mount the file's folder, play the bare leaf</td></tr>
+          <tr><td>Process bridge</td><td><span class="fn">runtime_config.json</span></td><td>service writes / player reads</td><td>in <code>addon_data/…</code>; carries settings across the process boundary</td></tr>
+          <tr><td>Routing</td><td><span class="fn">playercorefactory.xml</span></td><td>service writes / Kodi reads at boot</td><td>must persist; a fresh install needs one Kodi restart</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="principles">
+    <div class="shead"><span class="idx">07</span><h2>Design principles</h2></div>
+    <div class="cards">
+      <div class="card"><p class="tag t-teal">testability</p><h4>Pure cores, off-box testable</h4><p>detector, config, passthrough, ir_proto, and the volumeir/wizard logic import no <code>xbmc</code>, so the suite runs without hardware. All I/O sits behind thin adapters.</p></div>
+      <div class="card"><p class="tag t-purple">two processes</p><h4>A JSON file is the bridge</h4><p>The external player can't call <code>xbmcaddon</code>, so the in-Kodi service dumps resolved settings to <code>runtime_config.json</code> for it to read.</p></div>
+      <div class="card"><p class="tag t-teal">consistency</p><h4>Single source of truth</h4><p>The playercorefactory routing rules are derived from the same detector constants the runtime matches on — the XML can't drift from the in-process check.</p></div>
+      <div class="card"><p class="tag t-coral">CEC discipline</p><h4>Assert once per event</h4><p>Every TV switch is single-shot; there is no standing re-asserter, so if you change the TV input by hand, your choice stays.</p></div>
+      <div class="card"><p class="tag t-teal">resilience</p><h4>Best-effort, non-fatal</h4><p>Config publish, TV switch, give-up STOP, keymap sync, and all IR / volume / passthrough I/O are wrapped so a failure never skips the reclaim or crashes the service.</p></div>
+      <div class="card"><p class="tag t-purple">safety</p><h4>Default-off for anything new</h4><p>IR transports, remote passthrough, and volume takeover all ship off; the proven CEC handoff path is unchanged unless you opt in.</p></div>
+    </div>
+  </section>
+
+  <footer>
+    <p class="meta">branch feat/passthrough-volume-ir @ 590bab4 · Kodi 21+ / CoreELEC · OPPO M920x (UDP-203 clone)</p>
+    <div class="links">
+      <a href="https://github.com/skull-01/OppoKodiBridge-v4">repository</a>
+      <span>docs/SYSTEM_ARCHITECTURE.md</span>
+      <span>docs/ARCHITECTURE.md — CEC deep-dive</span>
+      <span>docs/DIAGRAMS.md</span>
+    </div>
+  </footer>
+
+</div>
+</div>
+
+<script>
+  (function(){
+    var els = document.querySelectorAll('.fade');
+    if (!window.matchMedia || !window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    els.forEach(function(e){ e.style.opacity=1; e.style.transform='none'; e.style.animation='none'; });
+  })();
+</script>
+</body>
+</html>

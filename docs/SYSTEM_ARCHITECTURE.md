@@ -211,6 +211,8 @@ only the selected one loads.
 
 ## Related docs
 
+- [`architecture.html`](architecture.html) — this whole-system view as a single self-contained,
+  theme-aware HTML page (open in a browser; the diagrams are inlined).
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — the CEC-handoff design & play→stop walkthrough (depth).
 - [`DIAGRAMS.md`](DIAGRAMS.md) — rendered CEC architecture + per-model user-journey diagrams.
 - [`PLAYING_DISCS_FROM_NETWORK.md`](PLAYING_DISCS_FROM_NETWORK.md) — the NFS mount/play path.
